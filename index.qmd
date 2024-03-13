@@ -1,0 +1,450 @@
+---
+title: "Advanced Time Series Models"
+css: mycssblend.css
+logo: img/qbslogo.png
+footer: "Advanced Financial Data Analytics"
+bibliography: refs.bib
+format: 
+  revealjs:
+    height: 900
+    width: 1600
+    slide-number: c/t
+    scrollable: true
+---
+
+## Introduction
+- Financial time series often exhibit time-varying volatility
+- Financial time series have interdependencies and nonlinearities
+- Modeling and forecasting volatility is crucial for:
+  - Risk management
+  - Option pricing
+  - Portfolio optimization
+- Two important model classes:
+  - Volatility models (ARCH, GARCH)
+  - Multivariate time series models (VAR, VECM, State Space Models)
+
+## ARIMA Models and Volatility
+- ARIMA: Autoregressive Integrated Moving Average
+- Models linear dependence, trend, short-term dynamics
+- Assumes constant variance (homoscedasticity)
+- Limitations for financial series with time-varying volatility (heteroscedasticity)
+
+## From ARIMA to Volatility Models
+- Volatility models extend ARIMA to capture time-varying conditional variance
+- ARCH (Autoregressive Conditional Heteroscedasticity) 
+  - Models current volatility as function of past squared residuals
+- GARCH (Generalized ARCH)
+  - Adds lagged conditional variances
+  - Captures persistence of volatility
+- Complement ARIMA: 
+  - ARIMA for conditional mean
+  - GARCH for conditional variance
+- ARIMA-GARCH model: Mean equation (ARIMA) + Variance equation (GARCH)
+
+# Volatility Models: Types and Applications
+
+## ARCH Models
+- Models current volatility as function of past squared residuals
+- ARCH(q): $\sigma_t^2 = \alpha_0 + \alpha_1 \epsilon_{t-1}^2 + \ldots + \alpha_q \epsilon_{t-q}^2$
+- Used for studying impact of events on volatility, estimating Value-at-Risk
+- Machine learning extensions: 
+  - NNARCH: Neural Network ARCH [@donaldson1997neural] ([R package](https://cran.r-project.org/web/packages/nnarch/index.html))
+  - SVARCH: Support Vector ARCH [@chen2014support] ([MATLAB code](https://www.mathworks.com/matlabcentral/fileexchange/47378-support-vector-arch-sv-arch-model))
+
+## R Example - ARCH Model
+```{r}
+#| echo: true
+library(tseries)
+library(fGarch)
+
+data(EuStockMarkets)
+dax_returns = diff(log(EuStockMarkets[,"DAX"]))
+
+arch_fit = garchFit(~garch(1,0), data=dax_returns, trace=FALSE)
+summary(arch_fit)
+```
+
+## Explanation of ARCH Model Code
+- Load the required `tseries` and `fGarch` packages
+- Load the `EuStockMarkets` dataset and extract the `DAX` index
+- Calculate log returns of the `DAX` index using `diff(log())`
+- Fit an ARCH(1) model using `garchFit()` function
+  - Specify the ARCH order as `garch(1,0)`
+  - Use `trace=FALSE` to suppress optimization output
+- Display the summary of the fitted ARCH model
+
+## GARCH Models
+- Extends ARCH by adding lagged conditional variances
+- GARCH(p,q): $\sigma_t^2 = \alpha_0 + \sum_{i=1}^{p} \alpha_i \epsilon_{t-i}^2 + \sum_{j=1}^{q} \beta_j \sigma_{t-j}^2$
+- Captures persistence of volatility
+- Used for volatility forecasting, risk management, option pricing
+- Machine learning extensions:
+  - Deep GARCH: LSTM-based GARCH [@kim2019forecasting] ([Python code](https://github.com/simaki/deepgarch))
+  - Autoencoder GARCH: Autoencoder & RNN-based GARCH [@heaton2017deep] ([Python code](https://github.com/Technica-Corporation/Deep-Portfolio))
+
+## R Example - GARCH(1,1) Model
+```{r}
+#| echo: true
+library(rugarch)
+
+spec = ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1, 1)), 
+                  mean.model = list(armaOrder = c(0, 0)), distribution.model = "norm")
+                  
+fit = ugarchfit(spec, data = dax_returns)
+
+forecast_garch = ugarchforecast(fit, n.ahead = 10)
+```
+
+## Explanation of GARCH Model Code
+- Load the `rugarch` package
+- Specify the GARCH model using `ugarchspec()`
+  - Set the variance model to `sGARCH` (standard GARCH)
+  - Set the GARCH order to `(1, 1)`
+  - Specify the mean model as `ARMA(0, 0)` (constant mean)
+  - Set the error distribution to `norm` (Gaussian)
+- Fit the specified GARCH model to `dax_returns` using `ugarchfit()`
+- Generate forecasts for the next 10 steps using `ugarchforecast()`
+
+## EGARCH Models
+- Captures asymmetric response of volatility to shocks
+- Negative shocks have larger impact than positive (leverage effect)
+- $\log(\sigma_t^2) = \alpha_0 + \sum_{i=1}^{p} \alpha_i \frac{|\epsilon_{t-i}|}{\sigma_{t-i}} + \sum_{j=1}^{q} \beta_j \log(\sigma_{t-j}^2) + \sum_{k=1}^{r} \gamma_k \frac{\epsilon_{t-k}}{\sigma_{t-k}}$
+- Machine learning extensions:
+  - NNEGARCH: Neural Network EGARCH [@liu2020neural] ([Python code](https://github.com/Technica-Corporation/Neural-EGARCH))
+  - SVEGARCH: Support Vector EGARCH [@chen2020forecasting] ([MATLAB code](https://www.mathworks.com/matlabcentral/fileexchange/73381-sv-egarch-model))
+
+## R Example - EGARCH Model
+```{r}
+#| echo: true
+library(rugarch)
+
+spec_egarch = ugarchspec(variance.model = list(model = "eGARCH", garchOrder = c(1, 1)), 
+                         mean.model = list(armaOrder = c(0, 0)), distribution.model = "norm")
+
+fit_egarch = ugarchfit(spec_egarch, data = dax_returns)
+```
+
+## Explanation of EGARCH Model Code
+- Load the `rugarch` package
+- Specify the EGARCH model using `ugarchspec()`
+  - Set the variance model to `eGARCH` (exponential GARCH)
+  - Set the GARCH order to `(1, 1)`
+  - Specify the mean model as `ARMA(0, 0)` (constant mean)
+  - Set the error distribution to `norm` (Gaussian)
+- Fit the specified EGARCH model to `dax_returns` using `ugarchfit()`
+
+## IGARCH Models
+- Integrated GARCH, for highly persistent volatility
+- GARCH coefficients sum to one: $\sum_{i=1}^{p} \alpha_i + \sum_{j=1}^{q} \beta_j = 1$
+- For long memory in volatility
+- Machine learning extensions:
+  - NNIGARCH: Neural Network IGARCH [@li2016neural] ([R package](https://cran.r-project.org/web/packages/nnarch/index.html))
+  - SVIGARCH: Support Vector IGARCH [@chen2018forecasting] ([MATLAB code](https://www.mathworks.com/matlabcentral/fileexchange/73382-sv-igarch-model))
+
+## R Example - IGARCH Model
+```{r}
+#| echo: true
+library(rugarch)
+
+spec_igarch = ugarchspec(variance.model = list(model = "iGARCH", garchOrder = c(1, 1)), 
+                         mean.model = list(armaOrder = c(0, 0)), distribution.model = "norm")
+
+fit_igarch = ugarchfit(spec_igarch, data = dax_returns)
+```
+
+## Explanation of IGARCH Model Code
+- Load the `rugarch` package
+- Specify the IGARCH model using `ugarchspec()`
+  - Set the variance model to `iGARCH` (integrated GARCH)
+  - Set the GARCH order to `(1, 1)`
+  - Specify the mean model as `ARMA(0, 0)` (constant mean)
+  - Set the error distribution to `norm` (Gaussian)
+- Fit the specified IGARCH model to `dax_returns` using `ugarchfit()`
+
+## Multivariate Time Series Models
+
+- **Theoretical justification:**
+  - Financial variables often interact and influence each other
+  - Univariate models ignore potentially valuable information
+  - Multivariate models capture interdependencies and co-movements
+- **Practical justification:**
+  - Improved forecasting by leveraging information from multiple series
+  - Better understanding of dynamic relationships and spillover effects
+  - Crucial for portfolio management, risk assessment, policy analysis
+
+## Vector Autoregression (VAR)
+- Generalization of univariate AR to multivariate series
+- Each variable is linear function of its own lags & lags of others
+- VAR(p): $y_t = c + A_1 y_{t-1} + \ldots + A_p y_{t-p} + \varepsilon_t$
+- Used for macroeconomic analysis, policy impact studies
+- Machine learning extensions:
+  - RegVAR: Regularized VAR [@nicholson2017varx] ([R package](https://cran.r-project.org/web/packages/BigVAR/index.html))
+  - Deep VAR: LSTM & RNN-based VAR [@salinas2020deepar] ([Python code](https://github.com/awslabs/gluon-ts))
+
+## R Example - VAR(1) Model 
+```{r}
+#| echo: true 
+library(vars)
+
+set.seed(123)
+ts1 = cumsum(rnorm(100)) 
+ts2 = 0.5*ts1 + rnorm(100)
+
+fit_var = VAR(cbind(ts1, ts2), p=1) 
+
+summary(fit_var)
+
+forecast_var = predict(fit_var, n.ahead=10)
+```
+
+## Explanation of VAR Model Code
+- Load the `vars` package
+- Set a seed for reproducibility
+- Generate two simulated time series `ts1` and `ts2`
+  - `ts1` is a random walk process
+  - `ts2` is a linear combination of `ts1` plus noise
+- Fit a VAR(1) model to the combined time series using `VAR()`
+  - Specify the lag order `p=1`
+- Display the summary of the fitted VAR model
+- Generate forecasts for the next 10 steps using `predict()`
+
+## Cointegration & Error Correction Models
+- Some non-stationary series can combine to stationary series
+- Implies long-run equilibrium relationship
+- Error Correction Model (ECM) for short-run adjustments to equilibrium
+- $\Delta y_t = \alpha (y_{t-1} - \beta x_{t-1}) + \gamma_1 \Delta y_{t-1} + \gamma_2 \Delta x_{t-1} + \varepsilon_t$
+- Used for modeling long-run economic relationships
+- Machine learning extensions:
+  - SVR, ANN for cointegration estimation [@kao2009applying] ([R package](https://cran.r-project.org/web/packages/tsDyn/index.html))
+  - RF, GBM for ECM forecasting [@chuku2019intelligent] ([Python code](https://github.com/chukulert/LSTM-ECM))
+
+## R Example - Cointegration and ECM
+
+```{r}
+#| echo: true
+library(urca)
+library(dplyr)
+library(tibble)
+library(tidyr)
+
+set.seed(123)
+y <- cumsum(rnorm(100))
+x <- 0.5*y + rnorm(100)
+d <- tibble(y, x)
+
+# Perform lag and difference transformations using dplyr
+d <- d %>%
+  mutate(
+    y_lag1 = lag(y, 1), # Lag y by one period
+    x_lag1 = lag(x, 1), # Lag x by one period
+    diff_y = y - lag(y, 1), # Difference of y
+    diff_x = x - lag(x, 1), # Difference of x
+    diff_y_lag1 = lag(diff_y, 1), # Lagged difference of y
+    diff_x_lag1 = lag(diff_x, 1) # Lagged difference of x
+  ) %>%
+  drop_na() # Drop NA values to ensure all rows have complete cases
+
+# Fit the model with dplyr-transformed variables
+ecm_fit <- lm(diff_y ~ y_lag1 + x_lag1 + diff_y_lag1 + diff_x_lag1, data = d)
+
+summary(ecm_fit)
+```
+
+## Explanation of Cointegration and ECM Code
+- Load the `urca` package
+- Set a seed for reproducibility
+- Generate two cointegrated time series `y` and `x`
+  - `y` is a random walk process
+  - `x` is a linear combination of `y` plus noise
+- Perform Johansen cointegration test using `ca.jo()`
+  - Specify the test type as `"trace"` (trace test)
+  - Set the lag order `K=2`
+  - Specify the deterministic terms `ecdet="none"`
+  - Set the specification to `"transitory"` (no deterministic terms in cointegration)
+- Display the summary of the cointegration test
+- Fit an ECM using `lm()`
+  - Specify the differenced `y` as the dependent variable
+  - Include lagged levels and differences of `y` and `x` as predictors
+- Display the summary of the fitted ECM
+
+## Vector Error Correction Models (VECM)
+- VAR model for cointegrated series
+- Combines differencing & error correction
+- $\Delta y_t = \alpha \beta' y_{t-1} + \Gamma_1 \Delta y_{t-1} + \ldots + \Gamma_{p-1} \Delta y_{t-p+1} + \varepsilon_t$
+- Used for modeling cointegrated financial series, e.g., pairs trading
+- Machine learning extensions:
+  - Sparse VECM: LASSO & Adaptive LASSO [@wilms2016forecasting] ([R package](https://cran.r-project.org/web/packages/svars/index.html))
+  - CNN-VECM: Convolutional NN-based VECM [@borovykh2017conditional] ([Python code](https://github.com/philipperemy/deep-learning-bitcoin))
+  - Attention VECM: Attention mechanism for VECM [@borovykh2017conditional] ([Python code](https://github.com/philipperemy/deep-learning-bitcoin))
+
+## R Example - VECM
+```{r}
+#| echo: true
+library(tsDyn)
+
+vecm_fit = VECM(cbind(y,x), lag=2, r=1, include = "const", estim = "ML")
+summary(vecm_fit)
+
+vecm_forecast = predict(vecm_fit, n.ahead = 10)
+```
+
+## Explanation of VECM Code
+- Load the `tsDyn` package
+- Fit a VECM to the cointegrated series `y` and `x` using `VECM()`
+  - Specify the lag order `lag=2`
+  - Set the cointegration rank `r=1`
+  - Include a constant term in the model `include="const"`
+  - Use maximum likelihood estimation `estim="ML"`
+- Display the summary of the fitted VECM
+- Generate forecasts for the next 10 steps using `predict()`
+
+## Granger Causality
+- Tests if one series is useful for forecasting another
+- Series X Granger-causes Y if past X helps predict Y beyond past Y
+- Used for lead-lag analysis, studying information flow & spillovers
+- Machine learning extensions:
+  - Regularized GC: LASSO, Elastic Net [@nicholson2017varx] ([R package](https://cran.r-project.org/web/packages/BigVAR/index.html))
+  - Nonlinear ML GC: SVM, Random Forests [@tank2018neural] ([Python code](https://github.com/iancovert/neural-granger-causality))
+
+## R Example - Granger
+
+Causality
+```{r}
+#| echo: true
+library(lmtest)
+
+grangertest(y ~ x, order = 2)
+```
+
+## Explanation of Granger Causality Code
+- Load the `lmtest` package
+- Perform Granger causality test using `grangertest()`
+  - Specify the formula `y ~ x` to test if `x` Granger-causes `y`
+  - Set the lag order `order=2`
+- The test results indicate whether `x` Granger-causes `y` at the specified lag order
+
+
+## Critique of Granger Causality
+
+>Theoretical Critique
+
+- Granger causality is based on predictive ability, not true causality
+  - "Causes" in Granger sense means "helps predict" [@granger1980testing]
+  - Lacks interventional interpretation of causality [@pearl2009causal]
+- Assumes causal sufficiency: all relevant variables are included
+  - Omitted variables can lead to spurious Granger causality [@eichler2013causal]
+- Assumes no instantaneous causality: causes precede effects in time
+  - Instantaneous causality not captured by Granger causality [@lütkepohl2013vector]
+- Sensitive to variable transformations and aggregation [@sims1999granger]
+- Limited to linear models, may miss nonlinear causal relationships
+
+## Critique of Granger Causality
+
+>Practical Critique
+
+- Suffers from the usual problems of frequentist statistics
+  - P-values, confidence intervals, and hypothesis tests can be misinterpreted
+  - Sensitive to model assumptions and specification choices
+  
+- Requires large sample sizes for reliable results [@haugh1976checking]
+- Lag order selection can affect the conclusions [@thornton1985granger]
+- Aggregation over time (e.g., monthly vs. quarterly) can change results
+- Difficult to interpret when many variables are involved
+- Does not provide insight into causal mechanisms
+
+## Judea Pearl's Critique [@pearl2009causal]
+- Granger causality is a statistical notion, not a causal one
+- Causal inference requires interventional reasoning (do-calculus)
+- Granger causality cannot distinguish between:
+  - Direct causation: $X \rightarrow Y$
+  - Indirect causation: $X \rightarrow Z \rightarrow Y$
+  - Common cause: $Z \rightarrow X$ and $Z \rightarrow Y$
+- Granger causality can lead to incorrect causal conclusions
+  - Example: Barometer readings Granger-cause rain, but don't cause it
+
+## Clive Granger's Response [@granger1988some]
+- Acknowledged limitations of Granger causality
+- Emphasized it's a concept of "forecasting causality"
+- Agreed it does not imply true causality in all cases
+- Suggested using "Granger causality" to avoid confusion with true causality
+
+## Summarising the critique
+
+- Granger causality is a statistical concept of predictive ability
+- It is not a reliable method for inferring true causal relationships
+- Granger causality has several theoretical and practical limitations
+- Judea Pearl's causal inference framework provides a more rigorous approach
+- Granger acknowledged the limitations and the need for caution in interpretation
+
+
+
+## State Space Models & Kalman Filter
+- Model system via observed and unobserved (latent) variables
+- Measurement equation: observed = function(latent)
+- Transition equation: latent variable dynamics
+- Kalman filter estimates latent variables given observed data
+- Used for time-varying financial models, e.g., stochastic volatility
+- Machine learning extensions:
+  - Deep State Space: Deep learning for state space [@rangapuram2018deep] ([Python code](https://github.com/awslabs/gluon-ts))
+  - VAE: Variational Autoencoder for state space [@krishnan2017structured] ([Python code](https://github.com/clinicalml/structuredinference))
+  - Particle filtering: SMC, MCMC methods [@doucet2000sequential] ([R package](https://cran.r-project.org/web/packages/smcUtils/index.html))
+
+## R Example - State Space Model & Kalman Filter
+```{r}
+#| echo: true
+library(dlm)
+
+# Your buildFun definition remains the same
+buildFun = function(omega){
+  dlmModPoly(order = 1, dV = exp(omega[1]), dW = exp(omega[2]))
+}
+
+# Fitting the model
+fit_dlm = dlmMLE(y, parm = c(0, 0), build = buildFun)
+
+# IMPORTANT: Construct the model using the estimated parameters
+mod_estimated = buildFun(fit_dlm$par)
+
+# Apply dlmFilter and dlmSmooth using the constructed model with estimated parameters
+filtered_states = dlmFilter(y, mod = mod_estimated)
+smoothed_states = dlmSmooth(y, mod = mod_estimated)
+
+```
+
+
+## Explanation of State Space Model & Kalman Filter Code
+
+1. **Load the `dlm` Package**: The first step involves loading the `dlm` package in R. This package is specifically designed for handling dynamic linear models, which are a subset of state space models. It provides tools for model creation, parameter estimation, and inference, including filtering and smoothing.
+
+## Explanation {.small}
+2. **Define the `buildFun()` Function**:
+   - The purpose of this function is to construct a state space model that will be used for analysis. The function takes a parameter vector `omega` as input, which contains the parameters to be estimated.
+   - Inside `buildFun()`, the `dlmModPoly()` function is used to define a polynomial dynamic linear model. By setting the order to 1, you specify a simple model where the current state depends linearly on the previous state plus some Gaussian noise. This is essentially a first-order autoregressive process, AR(1).
+   - The `dV` (observation variance) and `dW` (state variance) are crucial components of the model. They represent the variance of the noise in the observed data and the variance of the noise in the state transition process, respectively. In this setup, both are set to be exponentials of the elements in `omega`. This transformation ensures that `dV` and `dW` are positive, as variances cannot be negative.
+
+## Explanation {.small}
+3. **Estimate Model Parameters Using `dlmMLE()`**:
+   - This step involves estimating the parameters of your state space model using maximum likelihood estimation (MLE), facilitated by the `dlmMLE` function. The time series data `y` is provided to the function along with initial guesses for the parameters (`parm = c(0, 0)`). These initial values are crucial as MLE involves optimization that can be sensitive to starting values.
+   - The `buildFun()` function is passed as an argument to `dlmMLE()`, which uses it to construct the model structure based on the current parameter estimates during the optimization process.
+   
+## Explanation {.small}
+4. **Apply the Kalman Filter Using `dlmFilter()`**:
+   - Once the model parameters have been estimated, the `dlmFilter()` function is used to apply the Kalman filter to the time series data. The Kalman filter is a recursive algorithm that provides estimates of the underlying state variables of the dynamic system as new data becomes available.
+   - The filtered state estimates represent the best estimates of the current state based on all available information up to the current time point. This is useful for understanding the underlying state of the system and for forecasting one step ahead.
+
+5. **Apply the Kalman Smoother Using `dlmSmooth()`**:
+   - The `dlmSmooth()` function applies the Kalman smoother to the time series data, using the model fitted with the estimated parameters. Unlike the Kalman filter, the smoother takes into account all available data (both past and future relative to the current time point) to provide the best estimates of the state variables.
+   - Smoothing is particularly useful for obtaining more accurate estimates of the state variables throughout the entire time series, as it incorporates information from the entire dataset.
+
+
+## Conclusion
+- Volatility & multivariate time series models critical for financial modeling
+- Volatility models extend ARIMA to capture time-varying variance
+- ARIMA-GARCH: Combine mean (ARIMA) and variance (GARCH) dynamics
+- Multivariate models capture interdependencies & cointegration
+  - Theoretically justified by interactions between financial variables
+  - Practically useful for improved forecasting, understanding dynamics
+- Machine learning greatly enhancing model flexibility & performance
+- Continued importance & innovation in this field
+
+## References
