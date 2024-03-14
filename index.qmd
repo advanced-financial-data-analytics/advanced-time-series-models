@@ -12,6 +12,10 @@ format:
     scrollable: true
 ---
 
+## Posgraduate Taught Experience Survey 
+
+![](img/Image 13-03-2024 at 12.14.jpg)
+
 ## Introduction
 - Financial time series often exhibit time-varying volatility
 - Financial time series have interdependencies and nonlinearities
@@ -28,6 +32,27 @@ format:
 - Models linear dependence, trend, short-term dynamics
 - Assumes constant variance (homoscedasticity)
 - Limitations for financial series with time-varying volatility (heteroscedasticity)
+
+## Example of Time-Varying Volatility {.small}
+
+```{r}
+#| echo: true
+library(tidyquant)
+library(tsfe)
+proj<- tsfe::indices
+proj |>  select(date,`CHINA A-DS MARKET $ - PRICE INDEX`) |>
+  rename(china= `CHINA A-DS MARKET $ - PRICE INDEX`) |>
+  arrange(date) |>
+  drop_na() |>
+  # calculate daily returns
+  mutate(rtn = log(china/lag(china))) |>
+  ggplot(aes(x = date, y = rtn)) +
+  geom_line() +
+  labs(title = "China A Stock Market returns",
+       x = "Date", y = "Daily Returns") +
+  theme_tq_green()
+
+```
 
 ## From ARIMA to Volatility Models
 - Volatility models extend ARIMA to capture time-varying conditional variance

@@ -418,6 +418,10 @@
 </div>
 
 </section>
+<section id="posgraduate-taught-experience-survey" class="slide level2">
+<h2>Posgraduate Taught Experience Survey</h2>
+
+<img data-src="img/Image%2013-03-2024%20at%2012.14.jpg" class="r-stretch"></section>
 <section id="introduction" class="slide level2">
 <h2>Introduction</h2>
 <ul>
@@ -445,6 +449,26 @@
 <li>Limitations for financial series with time-varying volatility (heteroscedasticity)</li>
 </ul>
 </section>
+<section id="example-of-time-varying-volatility" class="slide level2">
+<h2>Example of Time-Varying Volatility</h2>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href=""></a><span class="fu">library</span>(tidyquant)</span>
+<span id="cb1-2"><a href=""></a><span class="fu">library</span>(tsfe)</span>
+<span id="cb1-3"><a href=""></a>proj<span class="ot">&lt;-</span> tsfe<span class="sc">::</span>indices</span>
+<span id="cb1-4"><a href=""></a>proj <span class="sc">|&gt;</span>  <span class="fu">select</span>(date,<span class="st">`</span><span class="at">CHINA A-DS MARKET $ - PRICE INDEX</span><span class="st">`</span>) <span class="sc">|&gt;</span></span>
+<span id="cb1-5"><a href=""></a>  <span class="fu">rename</span>(<span class="at">china=</span> <span class="st">`</span><span class="at">CHINA A-DS MARKET $ - PRICE INDEX</span><span class="st">`</span>) <span class="sc">|&gt;</span></span>
+<span id="cb1-6"><a href=""></a>  <span class="fu">arrange</span>(date) <span class="sc">|&gt;</span></span>
+<span id="cb1-7"><a href=""></a>  <span class="fu">drop_na</span>() <span class="sc">|&gt;</span></span>
+<span id="cb1-8"><a href=""></a>  <span class="co"># calculate daily returns</span></span>
+<span id="cb1-9"><a href=""></a>  <span class="fu">mutate</span>(<span class="at">rtn =</span> <span class="fu">log</span>(china<span class="sc">/</span><span class="fu">lag</span>(china))) <span class="sc">|&gt;</span></span>
+<span id="cb1-10"><a href=""></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> date, <span class="at">y =</span> rtn)) <span class="sc">+</span></span>
+<span id="cb1-11"><a href=""></a>  <span class="fu">geom_line</span>() <span class="sc">+</span></span>
+<span id="cb1-12"><a href=""></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"China A Stock Market returns"</span>,</span>
+<span id="cb1-13"><a href=""></a>       <span class="at">x =</span> <span class="st">"Date"</span>, <span class="at">y =</span> <span class="st">"Daily Returns"</span>) <span class="sc">+</span></span>
+<span id="cb1-14"><a href=""></a>  <span class="fu">theme_tq_green</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+
+</div>
+<img data-src="index_files/figure-revealjs/unnamed-chunk-1-1.png" width="960" class="r-stretch"></section>
 <section id="from-arima-to-volatility-models" class="slide level2">
 <h2>From ARIMA to Volatility Models</h2>
 <ul>
@@ -487,14 +511,14 @@
 <section id="r-example---arch-model" class="slide level2">
 <h2>R Example - ARCH Model</h2>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href=""></a><span class="fu">library</span>(tseries)</span>
-<span id="cb1-2"><a href=""></a><span class="fu">library</span>(fGarch)</span>
-<span id="cb1-3"><a href=""></a></span>
-<span id="cb1-4"><a href=""></a><span class="fu">data</span>(EuStockMarkets)</span>
-<span id="cb1-5"><a href=""></a>dax_returns <span class="ot">=</span> <span class="fu">diff</span>(<span class="fu">log</span>(EuStockMarkets[,<span class="st">"DAX"</span>]))</span>
-<span id="cb1-6"><a href=""></a></span>
-<span id="cb1-7"><a href=""></a>arch_fit <span class="ot">=</span> <span class="fu">garchFit</span>(<span class="sc">~</span><span class="fu">garch</span>(<span class="dv">1</span>,<span class="dv">0</span>), <span class="at">data=</span>dax_returns, <span class="at">trace=</span><span class="cn">FALSE</span>)</span>
-<span id="cb1-8"><a href=""></a><span class="fu">summary</span>(arch_fit)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href=""></a><span class="fu">library</span>(tseries)</span>
+<span id="cb2-2"><a href=""></a><span class="fu">library</span>(fGarch)</span>
+<span id="cb2-3"><a href=""></a></span>
+<span id="cb2-4"><a href=""></a><span class="fu">data</span>(EuStockMarkets)</span>
+<span id="cb2-5"><a href=""></a>dax_returns <span class="ot">=</span> <span class="fu">diff</span>(<span class="fu">log</span>(EuStockMarkets[,<span class="st">"DAX"</span>]))</span>
+<span id="cb2-6"><a href=""></a></span>
+<span id="cb2-7"><a href=""></a>arch_fit <span class="ot">=</span> <span class="fu">garchFit</span>(<span class="sc">~</span><span class="fu">garch</span>(<span class="dv">1</span>,<span class="dv">0</span>), <span class="at">data=</span>dax_returns, <span class="at">trace=</span><span class="cn">FALSE</span>)</span>
+<span id="cb2-8"><a href=""></a><span class="fu">summary</span>(arch_fit)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>
 Title:
@@ -505,7 +529,7 @@ Call:
 
 Mean and Variance Equation:
  data ~ garch(1, 0)
-&lt;environment: 0x11b25c940&gt;
+&lt;environment: 0x113cc54e0&gt;
  [data = dax_returns]
 
 Conditional Distribution:
@@ -530,7 +554,7 @@ Log Likelihood:
  5884.652    normalized:  3.165493 
 
 Description:
- Wed Mar 13 15:22:58 2024 by user:  
+ Thu Mar 14 13:43:06 2024 by user:  
 
 
 Standardised Residuals Tests:
@@ -582,14 +606,14 @@ Information Criterion Statistics:
 <section id="r-example---garch11-model" class="slide level2">
 <h2>R Example - GARCH(1,1) Model</h2>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href=""></a><span class="fu">library</span>(rugarch)</span>
-<span id="cb3-2"><a href=""></a></span>
-<span id="cb3-3"><a href=""></a>spec <span class="ot">=</span> <span class="fu">ugarchspec</span>(<span class="at">variance.model =</span> <span class="fu">list</span>(<span class="at">model =</span> <span class="st">"sGARCH"</span>, <span class="at">garchOrder =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>)), </span>
-<span id="cb3-4"><a href=""></a>                  <span class="at">mean.model =</span> <span class="fu">list</span>(<span class="at">armaOrder =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">0</span>)), <span class="at">distribution.model =</span> <span class="st">"norm"</span>)</span>
-<span id="cb3-5"><a href=""></a>                  </span>
-<span id="cb3-6"><a href=""></a>fit <span class="ot">=</span> <span class="fu">ugarchfit</span>(spec, <span class="at">data =</span> dax_returns)</span>
-<span id="cb3-7"><a href=""></a></span>
-<span id="cb3-8"><a href=""></a>forecast_garch <span class="ot">=</span> <span class="fu">ugarchforecast</span>(fit, <span class="at">n.ahead =</span> <span class="dv">10</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href=""></a><span class="fu">library</span>(rugarch)</span>
+<span id="cb4-2"><a href=""></a></span>
+<span id="cb4-3"><a href=""></a>spec <span class="ot">=</span> <span class="fu">ugarchspec</span>(<span class="at">variance.model =</span> <span class="fu">list</span>(<span class="at">model =</span> <span class="st">"sGARCH"</span>, <span class="at">garchOrder =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>)), </span>
+<span id="cb4-4"><a href=""></a>                  <span class="at">mean.model =</span> <span class="fu">list</span>(<span class="at">armaOrder =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">0</span>)), <span class="at">distribution.model =</span> <span class="st">"norm"</span>)</span>
+<span id="cb4-5"><a href=""></a>                  </span>
+<span id="cb4-6"><a href=""></a>fit <span class="ot">=</span> <span class="fu">ugarchfit</span>(spec, <span class="at">data =</span> dax_returns)</span>
+<span id="cb4-7"><a href=""></a></span>
+<span id="cb4-8"><a href=""></a>forecast_garch <span class="ot">=</span> <span class="fu">ugarchforecast</span>(fit, <span class="at">n.ahead =</span> <span class="dv">10</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </section>
 <section id="explanation-of-garch-model-code" class="slide level2">
@@ -623,12 +647,12 @@ Information Criterion Statistics:
 <section id="r-example---egarch-model" class="slide level2">
 <h2>R Example - EGARCH Model</h2>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href=""></a><span class="fu">library</span>(rugarch)</span>
-<span id="cb4-2"><a href=""></a></span>
-<span id="cb4-3"><a href=""></a>spec_egarch <span class="ot">=</span> <span class="fu">ugarchspec</span>(<span class="at">variance.model =</span> <span class="fu">list</span>(<span class="at">model =</span> <span class="st">"eGARCH"</span>, <span class="at">garchOrder =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>)), </span>
-<span id="cb4-4"><a href=""></a>                         <span class="at">mean.model =</span> <span class="fu">list</span>(<span class="at">armaOrder =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">0</span>)), <span class="at">distribution.model =</span> <span class="st">"norm"</span>)</span>
-<span id="cb4-5"><a href=""></a></span>
-<span id="cb4-6"><a href=""></a>fit_egarch <span class="ot">=</span> <span class="fu">ugarchfit</span>(spec_egarch, <span class="at">data =</span> dax_returns)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href=""></a><span class="fu">library</span>(rugarch)</span>
+<span id="cb5-2"><a href=""></a></span>
+<span id="cb5-3"><a href=""></a>spec_egarch <span class="ot">=</span> <span class="fu">ugarchspec</span>(<span class="at">variance.model =</span> <span class="fu">list</span>(<span class="at">model =</span> <span class="st">"eGARCH"</span>, <span class="at">garchOrder =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>)), </span>
+<span id="cb5-4"><a href=""></a>                         <span class="at">mean.model =</span> <span class="fu">list</span>(<span class="at">armaOrder =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">0</span>)), <span class="at">distribution.model =</span> <span class="st">"norm"</span>)</span>
+<span id="cb5-5"><a href=""></a></span>
+<span id="cb5-6"><a href=""></a>fit_egarch <span class="ot">=</span> <span class="fu">ugarchfit</span>(spec_egarch, <span class="at">data =</span> dax_returns)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </section>
 <section id="explanation-of-egarch-model-code" class="slide level2">
@@ -661,12 +685,12 @@ Information Criterion Statistics:
 <section id="r-example---igarch-model" class="slide level2">
 <h2>R Example - IGARCH Model</h2>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href=""></a><span class="fu">library</span>(rugarch)</span>
-<span id="cb5-2"><a href=""></a></span>
-<span id="cb5-3"><a href=""></a>spec_igarch <span class="ot">=</span> <span class="fu">ugarchspec</span>(<span class="at">variance.model =</span> <span class="fu">list</span>(<span class="at">model =</span> <span class="st">"iGARCH"</span>, <span class="at">garchOrder =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>)), </span>
-<span id="cb5-4"><a href=""></a>                         <span class="at">mean.model =</span> <span class="fu">list</span>(<span class="at">armaOrder =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">0</span>)), <span class="at">distribution.model =</span> <span class="st">"norm"</span>)</span>
-<span id="cb5-5"><a href=""></a></span>
-<span id="cb5-6"><a href=""></a>fit_igarch <span class="ot">=</span> <span class="fu">ugarchfit</span>(spec_igarch, <span class="at">data =</span> dax_returns)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href=""></a><span class="fu">library</span>(rugarch)</span>
+<span id="cb6-2"><a href=""></a></span>
+<span id="cb6-3"><a href=""></a>spec_igarch <span class="ot">=</span> <span class="fu">ugarchspec</span>(<span class="at">variance.model =</span> <span class="fu">list</span>(<span class="at">model =</span> <span class="st">"iGARCH"</span>, <span class="at">garchOrder =</span> <span class="fu">c</span>(<span class="dv">1</span>, <span class="dv">1</span>)), </span>
+<span id="cb6-4"><a href=""></a>                         <span class="at">mean.model =</span> <span class="fu">list</span>(<span class="at">armaOrder =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">0</span>)), <span class="at">distribution.model =</span> <span class="st">"norm"</span>)</span>
+<span id="cb6-5"><a href=""></a></span>
+<span id="cb6-6"><a href=""></a>fit_igarch <span class="ot">=</span> <span class="fu">ugarchfit</span>(spec_igarch, <span class="at">data =</span> dax_returns)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </section>
 <section id="explanation-of-igarch-model-code" class="slide level2">
@@ -717,15 +741,15 @@ Information Criterion Statistics:
 <section id="r-example---var1-model" class="slide level2">
 <h2>R Example - VAR(1) Model</h2>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href=""></a><span class="fu">library</span>(vars)</span>
-<span id="cb6-2"><a href=""></a></span>
-<span id="cb6-3"><a href=""></a><span class="fu">set.seed</span>(<span class="dv">123</span>)</span>
-<span id="cb6-4"><a href=""></a>ts1 <span class="ot">=</span> <span class="fu">cumsum</span>(<span class="fu">rnorm</span>(<span class="dv">100</span>)) </span>
-<span id="cb6-5"><a href=""></a>ts2 <span class="ot">=</span> <span class="fl">0.5</span><span class="sc">*</span>ts1 <span class="sc">+</span> <span class="fu">rnorm</span>(<span class="dv">100</span>)</span>
-<span id="cb6-6"><a href=""></a></span>
-<span id="cb6-7"><a href=""></a>fit_var <span class="ot">=</span> <span class="fu">VAR</span>(<span class="fu">cbind</span>(ts1, ts2), <span class="at">p=</span><span class="dv">1</span>) </span>
-<span id="cb6-8"><a href=""></a></span>
-<span id="cb6-9"><a href=""></a><span class="fu">summary</span>(fit_var)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href=""></a><span class="fu">library</span>(vars)</span>
+<span id="cb7-2"><a href=""></a></span>
+<span id="cb7-3"><a href=""></a><span class="fu">set.seed</span>(<span class="dv">123</span>)</span>
+<span id="cb7-4"><a href=""></a>ts1 <span class="ot">=</span> <span class="fu">cumsum</span>(<span class="fu">rnorm</span>(<span class="dv">100</span>)) </span>
+<span id="cb7-5"><a href=""></a>ts2 <span class="ot">=</span> <span class="fl">0.5</span><span class="sc">*</span>ts1 <span class="sc">+</span> <span class="fu">rnorm</span>(<span class="dv">100</span>)</span>
+<span id="cb7-6"><a href=""></a></span>
+<span id="cb7-7"><a href=""></a>fit_var <span class="ot">=</span> <span class="fu">VAR</span>(<span class="fu">cbind</span>(ts1, ts2), <span class="at">p=</span><span class="dv">1</span>) </span>
+<span id="cb7-8"><a href=""></a></span>
+<span id="cb7-9"><a href=""></a><span class="fu">summary</span>(fit_var)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>
 VAR Estimation Results:
@@ -785,7 +809,7 @@ Correlation matrix of residuals:
 ts1 1.0000 0.3833
 ts2 0.3833 1.0000</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href=""></a>forecast_var <span class="ot">=</span> <span class="fu">predict</span>(fit_var, <span class="at">n.ahead=</span><span class="dv">10</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href=""></a>forecast_var <span class="ot">=</span> <span class="fu">predict</span>(fit_var, <span class="at">n.ahead=</span><span class="dv">10</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </section>
 <section id="explanation-of-var-model-code" class="slide level2">
@@ -824,32 +848,32 @@ ts2 0.3833 1.0000</code></pre>
 <section id="r-example---cointegration-and-ecm" class="slide level2">
 <h2>R Example - Cointegration and ECM</h2>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href=""></a><span class="fu">library</span>(urca)</span>
-<span id="cb9-2"><a href=""></a><span class="fu">library</span>(dplyr)</span>
-<span id="cb9-3"><a href=""></a><span class="fu">library</span>(tibble)</span>
-<span id="cb9-4"><a href=""></a><span class="fu">library</span>(tidyr)</span>
-<span id="cb9-5"><a href=""></a></span>
-<span id="cb9-6"><a href=""></a><span class="fu">set.seed</span>(<span class="dv">123</span>)</span>
-<span id="cb9-7"><a href=""></a>y <span class="ot">&lt;-</span> <span class="fu">cumsum</span>(<span class="fu">rnorm</span>(<span class="dv">100</span>))</span>
-<span id="cb9-8"><a href=""></a>x <span class="ot">&lt;-</span> <span class="fl">0.5</span><span class="sc">*</span>y <span class="sc">+</span> <span class="fu">rnorm</span>(<span class="dv">100</span>)</span>
-<span id="cb9-9"><a href=""></a>d <span class="ot">&lt;-</span> <span class="fu">tibble</span>(y, x)</span>
-<span id="cb9-10"><a href=""></a></span>
-<span id="cb9-11"><a href=""></a><span class="co"># Perform lag and difference transformations using dplyr</span></span>
-<span id="cb9-12"><a href=""></a>d <span class="ot">&lt;-</span> d <span class="sc">%&gt;%</span></span>
-<span id="cb9-13"><a href=""></a>  <span class="fu">mutate</span>(</span>
-<span id="cb9-14"><a href=""></a>    <span class="at">y_lag1 =</span> <span class="fu">lag</span>(y, <span class="dv">1</span>), <span class="co"># Lag y by one period</span></span>
-<span id="cb9-15"><a href=""></a>    <span class="at">x_lag1 =</span> <span class="fu">lag</span>(x, <span class="dv">1</span>), <span class="co"># Lag x by one period</span></span>
-<span id="cb9-16"><a href=""></a>    <span class="at">diff_y =</span> y <span class="sc">-</span> <span class="fu">lag</span>(y, <span class="dv">1</span>), <span class="co"># Difference of y</span></span>
-<span id="cb9-17"><a href=""></a>    <span class="at">diff_x =</span> x <span class="sc">-</span> <span class="fu">lag</span>(x, <span class="dv">1</span>), <span class="co"># Difference of x</span></span>
-<span id="cb9-18"><a href=""></a>    <span class="at">diff_y_lag1 =</span> <span class="fu">lag</span>(diff_y, <span class="dv">1</span>), <span class="co"># Lagged difference of y</span></span>
-<span id="cb9-19"><a href=""></a>    <span class="at">diff_x_lag1 =</span> <span class="fu">lag</span>(diff_x, <span class="dv">1</span>) <span class="co"># Lagged difference of x</span></span>
-<span id="cb9-20"><a href=""></a>  ) <span class="sc">%&gt;%</span></span>
-<span id="cb9-21"><a href=""></a>  <span class="fu">drop_na</span>() <span class="co"># Drop NA values to ensure all rows have complete cases</span></span>
-<span id="cb9-22"><a href=""></a></span>
-<span id="cb9-23"><a href=""></a><span class="co"># Fit the model with dplyr-transformed variables</span></span>
-<span id="cb9-24"><a href=""></a>ecm_fit <span class="ot">&lt;-</span> <span class="fu">lm</span>(diff_y <span class="sc">~</span> y_lag1 <span class="sc">+</span> x_lag1 <span class="sc">+</span> diff_y_lag1 <span class="sc">+</span> diff_x_lag1, <span class="at">data =</span> d)</span>
-<span id="cb9-25"><a href=""></a></span>
-<span id="cb9-26"><a href=""></a><span class="fu">summary</span>(ecm_fit)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb10"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href=""></a><span class="fu">library</span>(urca)</span>
+<span id="cb10-2"><a href=""></a><span class="fu">library</span>(dplyr)</span>
+<span id="cb10-3"><a href=""></a><span class="fu">library</span>(tibble)</span>
+<span id="cb10-4"><a href=""></a><span class="fu">library</span>(tidyr)</span>
+<span id="cb10-5"><a href=""></a></span>
+<span id="cb10-6"><a href=""></a><span class="fu">set.seed</span>(<span class="dv">123</span>)</span>
+<span id="cb10-7"><a href=""></a>y <span class="ot">&lt;-</span> <span class="fu">cumsum</span>(<span class="fu">rnorm</span>(<span class="dv">100</span>))</span>
+<span id="cb10-8"><a href=""></a>x <span class="ot">&lt;-</span> <span class="fl">0.5</span><span class="sc">*</span>y <span class="sc">+</span> <span class="fu">rnorm</span>(<span class="dv">100</span>)</span>
+<span id="cb10-9"><a href=""></a>d <span class="ot">&lt;-</span> <span class="fu">tibble</span>(y, x)</span>
+<span id="cb10-10"><a href=""></a></span>
+<span id="cb10-11"><a href=""></a><span class="co"># Perform lag and difference transformations using dplyr</span></span>
+<span id="cb10-12"><a href=""></a>d <span class="ot">&lt;-</span> d <span class="sc">%&gt;%</span></span>
+<span id="cb10-13"><a href=""></a>  <span class="fu">mutate</span>(</span>
+<span id="cb10-14"><a href=""></a>    <span class="at">y_lag1 =</span> <span class="fu">lag</span>(y, <span class="dv">1</span>), <span class="co"># Lag y by one period</span></span>
+<span id="cb10-15"><a href=""></a>    <span class="at">x_lag1 =</span> <span class="fu">lag</span>(x, <span class="dv">1</span>), <span class="co"># Lag x by one period</span></span>
+<span id="cb10-16"><a href=""></a>    <span class="at">diff_y =</span> y <span class="sc">-</span> <span class="fu">lag</span>(y, <span class="dv">1</span>), <span class="co"># Difference of y</span></span>
+<span id="cb10-17"><a href=""></a>    <span class="at">diff_x =</span> x <span class="sc">-</span> <span class="fu">lag</span>(x, <span class="dv">1</span>), <span class="co"># Difference of x</span></span>
+<span id="cb10-18"><a href=""></a>    <span class="at">diff_y_lag1 =</span> <span class="fu">lag</span>(diff_y, <span class="dv">1</span>), <span class="co"># Lagged difference of y</span></span>
+<span id="cb10-19"><a href=""></a>    <span class="at">diff_x_lag1 =</span> <span class="fu">lag</span>(diff_x, <span class="dv">1</span>) <span class="co"># Lagged difference of x</span></span>
+<span id="cb10-20"><a href=""></a>  ) <span class="sc">%&gt;%</span></span>
+<span id="cb10-21"><a href=""></a>  <span class="fu">drop_na</span>() <span class="co"># Drop NA values to ensure all rows have complete cases</span></span>
+<span id="cb10-22"><a href=""></a></span>
+<span id="cb10-23"><a href=""></a><span class="co"># Fit the model with dplyr-transformed variables</span></span>
+<span id="cb10-24"><a href=""></a>ecm_fit <span class="ot">&lt;-</span> <span class="fu">lm</span>(diff_y <span class="sc">~</span> y_lag1 <span class="sc">+</span> x_lag1 <span class="sc">+</span> diff_y_lag1 <span class="sc">+</span> diff_x_lag1, <span class="at">data =</span> d)</span>
+<span id="cb10-25"><a href=""></a></span>
+<span id="cb10-26"><a href=""></a><span class="fu">summary</span>(ecm_fit)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>
 Call:
@@ -920,10 +944,10 @@ F-statistic: 0.6729 on 4 and 93 DF,  p-value: 0.6124</code></pre>
 <section id="r-example---vecm" class="slide level2">
 <h2>R Example - VECM</h2>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href=""></a><span class="fu">library</span>(tsDyn)</span>
-<span id="cb11-2"><a href=""></a></span>
-<span id="cb11-3"><a href=""></a>vecm_fit <span class="ot">=</span> <span class="fu">VECM</span>(<span class="fu">cbind</span>(y,x), <span class="at">lag=</span><span class="dv">2</span>, <span class="at">r=</span><span class="dv">1</span>, <span class="at">include =</span> <span class="st">"const"</span>, <span class="at">estim =</span> <span class="st">"ML"</span>)</span>
-<span id="cb11-4"><a href=""></a><span class="fu">summary</span>(vecm_fit)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href=""></a><span class="fu">library</span>(tsDyn)</span>
+<span id="cb12-2"><a href=""></a></span>
+<span id="cb12-3"><a href=""></a>vecm_fit <span class="ot">=</span> <span class="fu">VECM</span>(<span class="fu">cbind</span>(y,x), <span class="at">lag=</span><span class="dv">2</span>, <span class="at">r=</span><span class="dv">1</span>, <span class="at">include =</span> <span class="st">"const"</span>, <span class="at">estim =</span> <span class="st">"ML"</span>)</span>
+<span id="cb12-4"><a href=""></a><span class="fu">summary</span>(vecm_fit)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>#############
 ###Model VECM 
@@ -942,7 +966,7 @@ Equation x 0.5427(0.1121)***   -0.0731(0.1096)     0.0012(0.1398)
 Equation y -0.2296(0.1507)     -0.0428(0.1150)     -0.0976(0.0992)    
 Equation x -0.0644(0.1686)     -0.2994(0.1286)*    -0.1074(0.1110)    </code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb13"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href=""></a>vecm_forecast <span class="ot">=</span> <span class="fu">predict</span>(vecm_fit, <span class="at">n.ahead =</span> <span class="dv">10</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href=""></a>vecm_forecast <span class="ot">=</span> <span class="fu">predict</span>(vecm_fit, <span class="at">n.ahead =</span> <span class="dv">10</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </section>
 <section id="explanation-of-vecm-code" class="slide level2">
@@ -977,9 +1001,9 @@ Equation x -0.0644(0.1686)     -0.2994(0.1286)*    -0.1074(0.1110)    </code></p
 <h2>R Example - Granger</h2>
 <p>Causality</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href=""></a><span class="fu">library</span>(lmtest)</span>
-<span id="cb14-2"><a href=""></a></span>
-<span id="cb14-3"><a href=""></a><span class="fu">grangertest</span>(y <span class="sc">~</span> x, <span class="at">order =</span> <span class="dv">2</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb15"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href=""></a><span class="fu">library</span>(lmtest)</span>
+<span id="cb15-2"><a href=""></a></span>
+<span id="cb15-3"><a href=""></a><span class="fu">grangertest</span>(y <span class="sc">~</span> x, <span class="at">order =</span> <span class="dv">2</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>Granger causality test
 
@@ -1099,22 +1123,22 @@ Model 2: y ~ Lags(y, 1:2)
 <section id="r-example---state-space-model-kalman-filter" class="slide level2">
 <h2>R Example - State Space Model &amp; Kalman Filter</h2>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb16"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href=""></a><span class="fu">library</span>(dlm)</span>
-<span id="cb16-2"><a href=""></a></span>
-<span id="cb16-3"><a href=""></a><span class="co"># Your buildFun definition remains the same</span></span>
-<span id="cb16-4"><a href=""></a>buildFun <span class="ot">=</span> <span class="cf">function</span>(omega){</span>
-<span id="cb16-5"><a href=""></a>  <span class="fu">dlmModPoly</span>(<span class="at">order =</span> <span class="dv">1</span>, <span class="at">dV =</span> <span class="fu">exp</span>(omega[<span class="dv">1</span>]), <span class="at">dW =</span> <span class="fu">exp</span>(omega[<span class="dv">2</span>]))</span>
-<span id="cb16-6"><a href=""></a>}</span>
-<span id="cb16-7"><a href=""></a></span>
-<span id="cb16-8"><a href=""></a><span class="co"># Fitting the model</span></span>
-<span id="cb16-9"><a href=""></a>fit_dlm <span class="ot">=</span> <span class="fu">dlmMLE</span>(y, <span class="at">parm =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">0</span>), <span class="at">build =</span> buildFun)</span>
-<span id="cb16-10"><a href=""></a></span>
-<span id="cb16-11"><a href=""></a><span class="co"># IMPORTANT: Construct the model using the estimated parameters</span></span>
-<span id="cb16-12"><a href=""></a>mod_estimated <span class="ot">=</span> <span class="fu">buildFun</span>(fit_dlm<span class="sc">$</span>par)</span>
-<span id="cb16-13"><a href=""></a></span>
-<span id="cb16-14"><a href=""></a><span class="co"># Apply dlmFilter and dlmSmooth using the constructed model with estimated parameters</span></span>
-<span id="cb16-15"><a href=""></a>filtered_states <span class="ot">=</span> <span class="fu">dlmFilter</span>(y, <span class="at">mod =</span> mod_estimated)</span>
-<span id="cb16-16"><a href=""></a>smoothed_states <span class="ot">=</span> <span class="fu">dlmSmooth</span>(y, <span class="at">mod =</span> mod_estimated)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb17"><pre class="sourceCode numberSource r number-lines code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href=""></a><span class="fu">library</span>(dlm)</span>
+<span id="cb17-2"><a href=""></a></span>
+<span id="cb17-3"><a href=""></a><span class="co"># Your buildFun definition remains the same</span></span>
+<span id="cb17-4"><a href=""></a>buildFun <span class="ot">=</span> <span class="cf">function</span>(omega){</span>
+<span id="cb17-5"><a href=""></a>  <span class="fu">dlmModPoly</span>(<span class="at">order =</span> <span class="dv">1</span>, <span class="at">dV =</span> <span class="fu">exp</span>(omega[<span class="dv">1</span>]), <span class="at">dW =</span> <span class="fu">exp</span>(omega[<span class="dv">2</span>]))</span>
+<span id="cb17-6"><a href=""></a>}</span>
+<span id="cb17-7"><a href=""></a></span>
+<span id="cb17-8"><a href=""></a><span class="co"># Fitting the model</span></span>
+<span id="cb17-9"><a href=""></a>fit_dlm <span class="ot">=</span> <span class="fu">dlmMLE</span>(y, <span class="at">parm =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">0</span>), <span class="at">build =</span> buildFun)</span>
+<span id="cb17-10"><a href=""></a></span>
+<span id="cb17-11"><a href=""></a><span class="co"># IMPORTANT: Construct the model using the estimated parameters</span></span>
+<span id="cb17-12"><a href=""></a>mod_estimated <span class="ot">=</span> <span class="fu">buildFun</span>(fit_dlm<span class="sc">$</span>par)</span>
+<span id="cb17-13"><a href=""></a></span>
+<span id="cb17-14"><a href=""></a><span class="co"># Apply dlmFilter and dlmSmooth using the constructed model with estimated parameters</span></span>
+<span id="cb17-15"><a href=""></a>filtered_states <span class="ot">=</span> <span class="fu">dlmFilter</span>(y, <span class="at">mod =</span> mod_estimated)</span>
+<span id="cb17-16"><a href=""></a>smoothed_states <span class="ot">=</span> <span class="fu">dlmSmooth</span>(y, <span class="at">mod =</span> mod_estimated)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </section>
 <section id="explanation-of-state-space-model-kalman-filter-code" class="slide level2 scrollable">
