@@ -107,7 +107,10 @@ summary(arch_fit)
   - Deep GARCH: LSTM-based GARCH [@kim2019forecasting] ([Python code](https://github.com/simaki/deepgarch))
   - Autoencoder GARCH: Autoencoder & RNN-based GARCH [@heaton2017deep] ([Python code](https://github.com/Technica-Corporation/Deep-Portfolio))
 
-## R Example - GARCH(1,1) Model
+## R Example - GARCH(1,1) Model {.small}
+
+::: columns
+::: column
 ```{r}
 #| echo: true
 library(rugarch)
@@ -116,10 +119,18 @@ spec = ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
                   mean.model = list(armaOrder = c(0, 0)), distribution.model = "norm")
                   
 fit = ugarchfit(spec, data = dax_returns)
-
-forecast_garch = ugarchforecast(fit, n.ahead = 10)
+fit
 ```
+:::
+::: column
 
+```{r}
+#| echo: true
+forecast_garch = ugarchforecast(fit, n.ahead = 10)
+forecast_garch
+```
+:::
+:::
 ## Explanation of GARCH Model Code
 - Load the `rugarch` package
 - Specify the GARCH model using `ugarchspec()`
@@ -167,6 +178,7 @@ fit_egarch = ugarchfit(spec_egarch, data = dax_returns)
   - SVIGARCH: Support Vector IGARCH [@chen2018forecasting] ([MATLAB code](https://www.mathworks.com/matlabcentral/fileexchange/73382-sv-igarch-model))
 
 ## R Example - IGARCH Model
+
 ```{r}
 #| echo: true
 library(rugarch)
@@ -175,6 +187,8 @@ spec_igarch = ugarchspec(variance.model = list(model = "iGARCH", garchOrder = c(
                          mean.model = list(armaOrder = c(0, 0)), distribution.model = "norm")
 
 fit_igarch = ugarchfit(spec_igarch, data = dax_returns)
+fit_igarch
+
 ```
 
 ## Explanation of IGARCH Model Code
