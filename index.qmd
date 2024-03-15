@@ -221,6 +221,8 @@ fit_igarch
   - Deep VAR: LSTM & RNN-based VAR [@salinas2020deepar] ([Python code](https://github.com/awslabs/gluon-ts))
 
 ## R Example - VAR(1) Model 
+::: columns
+::: column
 ```{r}
 #| echo: true 
 library(vars)
@@ -235,6 +237,7 @@ summary(fit_var)
 
 forecast_var = predict(fit_var, n.ahead=10)
 ```
+:::
 
 ## Explanation of VAR Model Code
 - Load the `vars` package
