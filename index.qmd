@@ -1,492 +1,1841 @@
 ---
-title: "Advanced Time Series Models"
-css: mycssblend.css
-logo: img/qbslogo.png
+title: "Advanced Time Series Models" 
+author: "Barry Quinn"
 footer: "Advanced Financial Data Analytics"
-bibliography: refs.bib
+css: mycssblend.css
+embed-resources: true
+logo: img/qbslogo.png
+execute: 
+  echo: true
 format: 
   revealjs:
-    height: 900
-    width: 1600
     slide-number: c/t
+    smaller: true
     scrollable: true
+    
+editor: 
+  markdown: 
+    wrap: 72
 ---
 
-## Posgraduate Taught Experience Survey 
+```{r setup, include=FALSE}
+library(tidyverse)
+library(fontawesome) 
+library(tsfe)
+library(fpp2)
+library(tidyquant)
+library(latex2exp)
+library(rugarch)
+library(fGarch)
+library(vars)
+library(urca)
+library(tsDyn)
+library(lmtest)
+library(zoo)
+```
 
-![](img/Image 13-03-2024 at 12.14.jpg)
+## Learning outcomes
+
+::: saltinline
+- Understand volatility patterns in financial time series
+- Learn key volatility models: ARCH, GARCH and their variants
+- Explore multivariate time series models for capturing interdependencies
+- Apply these models to real financial data
+- Understand the economic intuition behind model selection
+:::
 
 ## Introduction
-- Financial time series often exhibit time-varying volatility
-- Financial time series have interdependencies and nonlinearities
-- Modeling and forecasting volatility is crucial for:
-  - Risk management
-  - Option pricing
-  - Portfolio optimization
-- Two important model classes:
-  - Volatility models (ARCH, GARCH)
-  - Multivariate time series models (VAR, VECM, State Space Models)
 
-## ARIMA Models and Volatility
-- ARIMA: Autoregressive Integrated Moving Average
-- Models linear dependence, trend, short-term dynamics
-- Assumes constant variance (homoscedasticity)
-- Limitations for financial series with time-varying volatility (heteroscedasticity)
+::: acidinline
+- Financial time series often exhibit **time-varying volatility**
+- Periods of high volatility tend to cluster together
+- Financial variables often influence each other
+- Beyond ARIMA: Two important model classes:
+  - **Volatility models** (ARCH, GARCH)
+  - **Multivariate time series models** (VAR, VECM)
+:::
+
+## Financial Time Series: Key Patterns {.smaller}
+
+::: columns
+::: {.column width="60%"}
+**Why standard time series models fall short:**
+
+- Financial returns show distinct patterns not captured by basic ARIMA models:
+
+1. **Fat tails**
+   - More extreme events than normal distribution predicts
+   - Need: Models with flexible error distributions
+
+2. **Volatility clustering**
+   - Turbulent periods follow turbulent periods
+   - Need: Models with time-varying variance
+   
+3. **Asymmetric effects**
+   - Negative shocks impact volatility more than positive ones
+   - Need: Models that capture this asymmetry
+:::
+
+::: {.column width="40%"}
+```{r fat_tails, echo=FALSE}
+# Example of a fat-tailed distribution
+set.seed(123)
+normal_data <- rnorm(1000)
+t_data <- rt(1000, df=3)
+
+# Create comparison
+hist(t_data, freq=FALSE, breaks=30, 
+     main="Student's t vs. Normal Distribution",
+     xlab="Returns", ylim=c(0, 0.4))
+curve(dnorm(x), add=TRUE, col="red", lwd=2)
+legend("topright", legend=c("Fat tails (t-dist)", "Normal"), 
+       col=c("black", "red"), lwd=c(1, 2))
+```
+:::
+:::
+
+## ARIMA Models and Volatility: Limitations
+
+- ARIMA: Good for modelling the **mean** of a time series
+- But assumes **constant variance** (homoscedasticity)
+- Financial markets have periods of calm and turbulence
+- Need models that capture **time-varying volatility**
+
+## Understanding Volatility: An Intuitive Approach {.smaller}
+
+::: columns
+::: {.column width="60%"}
+**What is volatility in finance?**
+
+- Measure of price variation over time
+- Higher volatility = larger price swings = greater uncertainty
+- **Intuition**: Think of volatility as the "nervousness" of a market
+
+**Why does volatility matter?**
+
+- Risk management: Higher volatility = higher risk
+- Option pricing: Option values increase with volatility
+- Trading strategies: Volatility creates opportunities
+- Economic signals: Volatility often reflects uncertainty
+:::
+
+::: {.column width="40%"}
+```{r vol_clustering, echo=FALSE}
+# Create illustration of volatility clustering
+set.seed(456)
+t <- 500
+x <- numeric(t)
+sigma <- numeric(t)
+sigma[1] <- 0.01
+
+# Generate process with volatility regimes
+for (i in 2:t) {
+  # Create volatility regimes
+  if (i > 100 && i <= 200) {
+    sigma[i] <- 0.03  # High volatility
+  } else if (i > 300 && i <= 400) {
+    sigma[i] <- 0.04  # Very high volatility
+  } else {
+    sigma[i] <- 0.01  # Normal volatility
+  }
+  
+  # Generate returns
+  x[i] <- rnorm(1, 0, sigma[i])
+}
+
+# Plot with regime labels
+plot(x, type="l", main="Volatility Clustering Example", 
+     xlab="Time", ylab="Returns")
+
+# Add shading for regimes
+rect(100, -0.15, 200, 0.15, col=rgb(1,0,0,0.1), border=NA)
+rect(300, -0.15, 400, 0.15, col=rgb(1,0,0,0.2), border=NA)
+
+# Add annotations
+text(150, 0.12, "High Volatility Regime")
+text(350, 0.12, "Very High Volatility Regime")
+```
+:::
+:::
 
 ## Example of Time-Varying Volatility {.small}
 
-```{r}
+::: columns
+::: {.column width="50%"}
+```{r sp500_returns}
 #| echo: true
 library(tidyquant)
-library(tsfe)
-proj<- tsfe::indices
-proj |>  select(date,`CHINA A-DS MARKET $ - PRICE INDEX`) |>
-  rename(china= `CHINA A-DS MARKET $ - PRICE INDEX`) |>
-  arrange(date) |>
-  drop_na() |>
-  # calculate daily returns
-  mutate(rtn = log(china/lag(china))) |>
-  ggplot(aes(x = date, y = rtn)) +
-  geom_line() +
-  labs(title = "China A Stock Market returns",
-       x = "Date", y = "Daily Returns") +
-  theme_tq_green()
+# Get S&P 500 data
+sp500 <- tq_get("^GSPC", from = "2018-01-01", to = "2022-12-31")
+# Calculate daily returns
+sp500_returns <- sp500 %>%
+  mutate(returns = log(adjusted/lag(adjusted))) %>%
+  na.omit()
 
+# Plot the returns
+head(sp500_returns)
+```
+:::
+
+::: {.column width="50%"}
+```{r sp500_plot, echo=FALSE}
+# Visualize the returns
+sp500_returns %>%
+  ggplot(aes(x = date, y = returns)) +
+  geom_line() +
+  labs(title = "S&P 500 Daily Returns",
+       subtitle = "Notice the volatility clustering",
+       x = "Date", y = "Daily Returns") +
+  # Add annotation for major market events
+  geom_vline(xintercept = as.Date("2020-03-11"), linetype = "dashed") +
+  annotate("text", x = as.Date("2020-03-11"), y = 0.05, 
+           label = "COVID-19 Pandemic", angle = 90, hjust = 0) +
+  theme_tq()
+```
+:::
+:::
+
+
+## Understanding Volatility Clustering {.smaller}
+
+**Why do financial markets show volatility clustering?**
+
+- **Information arrival**: New information doesn't come evenly
+- **Market psychology**: Fear leads to panic selling
+- **Leverage effects**: Falling prices increase debt-to-equity ratios
+- **Trading strategies**: Trend-following can amplify market moves
+
+- This clustering pattern cannot be captured by standard ARIMA models!
+
+## Detecting Volatility Clustering in Data {.small}
+
+::: columns
+::: {.column width="60%"}
+```{r arch_test_visual, echo=TRUE}
+# Load S&P 500 data
+sp500_returns <- diff(log(sp500$adjusted))
+
+# 1. Visual inspection of squared returns
+par(mfrow=c(2,1))
+plot(sp500_returns, main="S&P 500 Returns")
+plot(sp500_returns^2, main="Squared Returns (Proxy for Volatility)")
 ```
 
-## From ARIMA to Volatility Models
-- Volatility models extend ARIMA to capture time-varying conditional variance
-- ARCH (Autoregressive Conditional Heteroscedasticity) 
-  - Models current volatility as function of past squared residuals
-- GARCH (Generalized ARCH)
-  - Adds lagged conditional variances
-  - Captures persistence of volatility
-- Complement ARIMA: 
-  - ARIMA for conditional mean
-  - GARCH for conditional variance
-- ARIMA-GARCH model: Mean equation (ARIMA) + Variance equation (GARCH)
+**Visual approach:**
+
+- Returns appear to fluctuate around zero
+- Periods of high volatility cluster together
+- Squared returns highlight volatility patterns
+- Visual evidence suggests volatility clustering
+:::
+
+::: {.column width="40%"}
+```{r arch_test_formal, echo=TRUE}
+# 2. Test for ARCH effects
+library(FinTS)
+arch_test <- ArchTest(sp500_returns, lags=10)
+print(arch_test)
+```
+
+**Statistical confirmation:**
+
+- ARCH LM test examines if variance depends on past squared returns
+- Null hypothesis: No ARCH effects (constant variance)
+- Low p-value: Strong evidence of time-varying volatility
+- **Conclusion:** The significant p-value confirms the presence of ARCH effects (volatility clustering)
+
+:::
+:::
+
+- By combining visual inspection with formal statistical testing, we can identify volatility clustering patterns that standard ARIMA models cannot capture.
+
+
+## From ARIMA to Volatility Models {.smaller}
+
+::: columns
+::: {.column width="60%"}
+- ARIMA models the **conditional mean**
+- Volatility models extend this to capture **conditional variance**
+- The complete model has two parts:
+  - **Mean equation**: $y_t = c + \phi_1 y_{t-1} + ... + \varepsilon_t$
+  - **Variance equation**: $\sigma_t^2 = f(\varepsilon_{t-1}^2, \sigma_{t-1}^2, ...)$
+:::
+
+::: {.column width="40%"}
+```{r sim_process, echo=FALSE}
+library(rugarch)
+
+# Set seed for reproducibility
+set.seed(123)
+
+# Specify GARCH(1,1) model
+spec <- ugarchspec(
+  variance.model = list(model = "sGARCH", garchOrder = c(1, 1)),
+  mean.model = list(armaOrder = c(0, 0), include.mean = TRUE),
+  distribution.model = "norm",
+  fixed.pars = list(mu = 0, omega = 0.1, alpha1 = 0.1, beta1 = 0.8)
+)
+
+# Simulate the GARCH process
+sim <- ugarchpath(spec, n.sim = 1000)
+
+# Extract returns and conditional variance
+sim_data <- zoo::zoo(sim@path$seriesSim, order.by = 1:1000)
+cond_var <- zoo::zoo(sim@path$sigmaSim^2, order.by = 1:1000)
+
+# Plot results
+par(mfrow = c(2, 1), mar = c(2, 4, 2, 1))
+plot(sim_data, main = "Simulated Returns", col = "blue", ylab = "Returns")
+plot(sqrt(cond_var), main = "Conditional Volatility", col = "red", ylab = "Volatility")
+```
+:::
+:::
 
 # Volatility Models: Types and Applications
 
-## ARCH Models
-- Models current volatility as function of past squared residuals
-- ARCH(q): $\sigma_t^2 = \alpha_0 + \alpha_1 \epsilon_{t-1}^2 + \ldots + \alpha_q \epsilon_{t-q}^2$
-- Used for studying impact of events on volatility, estimating Value-at-Risk
-- Machine learning extensions: 
-  - NNARCH: Neural Network ARCH [@donaldson1997neural] ([R package](https://cran.r-project.org/web/packages/nnarch/index.html))
-  - SVARCH: Support Vector ARCH [@chen2014support] ([MATLAB code](https://www.mathworks.com/matlabcentral/fileexchange/47378-support-vector-arch-sv-arch-model))
+## ARCH Models: The Intuition {.smaller}
 
-## R Example - ARCH Model
-```{r}
+::: columns
+::: {.column width="60%"}
+**The core insight:**
+Today's volatility depends on yesterday's market surprise (squared return)
+
+**Think of it like weather:**
+
+- If yesterday had a surprising storm (big market move), 
+- Today is more likely to be turbulent (high volatility)
+
+**The simplest ARCH(1) model in everyday terms:**
+
+- Today's risk level = Base risk level + Extra risk from yesterday's surprise
+- Mathematically: $\sigma_t^2 = \alpha_0 + \alpha_1\varepsilon_{t-1}^2$
+
+**When to use ARCH models:**
+
+- When volatility shows clear clustering patterns
+- For simpler modeling as a benchmark
+:::
+
+::: {.column width="40%"}
+```{r arch_illustration, echo=FALSE}
+# Visual representation of ARCH impact
+set.seed(123)
+eps <- rnorm(100)
+# Create a shock
+eps[50] <- 3
+
+# ARCH(1) process
+alpha0 <- 0.2
+alpha1 <- 0.7
+sigma2 <- numeric(100)
+sigma2[1] <- alpha0/(1-alpha1)
+
+for (t in 2:100) {
+  sigma2[t] <- alpha0 + alpha1 * eps[t-1]^2
+}
+
+# Plot
+par(mfrow=c(2,1), mar=c(3,4,2,1))
+plot(eps, type="h", main="Market Surprises (Shocks)", 
+     col=ifelse(abs(eps)>2, "red", "blue"),
+     ylab="Shock Size")
+abline(h=0)
+plot(sqrt(sigma2), type="l", col="red", lwd=2,
+     main="Resulting Volatility (ARCH Effect)",
+     ylab="Volatility")
+```
+:::
+:::
+
+## ARCH Models: The Foundation
+
+::: columns
+::: {.column width="60%"}
+- Developed by Engle (1982) - Nobel Prize 2003
+- **A**uto**R**egressive **C**onditional **H**eteroskedasticity
+- Models current volatility as function of past squared residuals:
+
+$$\sigma_t^2 = \alpha_0 + \alpha_1 \varepsilon_{t-1}^2 + ... + \alpha_q \varepsilon_{t-q}^2$$
+
+- Captures the tendency of volatility to cluster
+- Real-world applications:
+  - Risk management
+  - Option pricing
+  - Value-at-Risk estimation
+:::
+
+::: {.column width="40%"}
+```{r arch_sim, echo=FALSE}
+set.seed(123)
+# Simulate ARCH(1) process
+arch_spec <- ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(0, 1)),
+                      mean.model = list(armaOrder = c(0, 0)), 
+                      fixed.pars = list(mu = 0, omega = 0.1, alpha1 = 0.1, beta1 = 0.8))
+arch_sim <- ugarchpath(arch_spec, n.sim = 200)
+
+# Plot
+plot(arch_sim@path$seriesSim, type="l", 
+     main="Simulated ARCH(1) Process", 
+     xlab="Time", ylab="Returns")
+```
+:::
+:::
+
+## R Example - ARCH Model {.smaller}
+
+```{r arch_example}
 #| echo: true
-library(tseries)
-library(fGarch)
-
+# Load data
 data(EuStockMarkets)
 dax_returns = diff(log(EuStockMarkets[,"DAX"]))
 
+# Plot the DAX returns
+plot(dax_returns, main="DAX Daily Returns")
+
+# Fit an ARCH(1) model
 arch_fit = garchFit(~garch(1,0), data=dax_returns, trace=FALSE)
 summary(arch_fit)
 ```
 
-## Explanation of ARCH Model Code
-- Load the required `tseries` and `fGarch` packages
-- Load the `EuStockMarkets` dataset and extract the `DAX` index
-- Calculate log returns of the `DAX` index using `diff(log())`
-- Fit an ARCH(1) model using `garchFit()` function
-  - Specify the ARCH order as `garch(1,0)`
-  - Use `trace=FALSE` to suppress optimization output
-- Display the summary of the fitted ARCH model
-
-## GARCH Models
-- Extends ARCH by adding lagged conditional variances
-- GARCH(p,q): $\sigma_t^2 = \alpha_0 + \sum_{i=1}^{p} \alpha_i \epsilon_{t-i}^2 + \sum_{j=1}^{q} \beta_j \sigma_{t-j}^2$
-- Captures persistence of volatility
-- Used for volatility forecasting, risk management, option pricing
-- Machine learning extensions:
-  - Deep GARCH: LSTM-based GARCH [@kim2019forecasting] ([Python code](https://github.com/simaki/deepgarch))
-  - Autoencoder GARCH: Autoencoder & RNN-based GARCH [@heaton2017deep] ([Python code](https://github.com/Technica-Corporation/Deep-Portfolio))
-
-## R Example - GARCH(1,1) Model {.small}
+## Interpreting ARCH Results
 
 ::: columns
-::: column
-```{r}
-#| echo: true
-library(rugarch)
+::: {.column width="60%"}
+**Key parameters to examine:**
 
-spec = ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1, 1)), 
-                  mean.model = list(armaOrder = c(0, 0)), distribution.model = "norm")
-                  
-fit = ugarchfit(spec, data = dax_returns)
-fit
-```
+1. **α₀ (omega)**: Baseline volatility level
+   - Typically small (0.00001-0.001)
+   - Higher values indicate higher minimum volatility
+
+2. **α₁ (alpha1)**: Reaction to market shocks
+   - Measures how quickly volatility responds to news
+   - Higher values indicate markets react more strongly
+   - Should be positive and < 1 for stability
+
+**Key diagnostic checks:**
+
+- Check if standardized residuals look like white noise
+- Test for remaining ARCH effects
+- Assess in-sample fit (AIC, BIC, log-likelihood)
 :::
-::: column
 
-```{r}
-#| echo: true
-forecast_garch = ugarchforecast(fit, n.ahead = 10)
-forecast_garch
-```
-:::
-:::
-## Explanation of GARCH Model Code
-- Load the `rugarch` package
-- Specify the GARCH model using `ugarchspec()`
-  - Set the variance model to `sGARCH` (standard GARCH)
-  - Set the GARCH order to `(1, 1)`
-  - Specify the mean model as `ARMA(0, 0)` (constant mean)
-  - Set the error distribution to `norm` (Gaussian)
-- Fit the specified GARCH model to `dax_returns` using `ugarchfit()`
-- Generate forecasts for the next 10 steps using `ugarchforecast()`
+::: {.column width="40%"}
+```{r arch_impact, echo=FALSE}
+# Extract model info from previous fit
+coefs <- coef(arch_fit)
+omega <- coefs["omega"]
+alpha1 <- coefs["alpha1"]
 
-## EGARCH Models
-- Captures asymmetric response of volatility to shocks
-- Negative shocks have larger impact than positive (leverage effect)
-- $\log(\sigma_t^2) = \alpha_0 + \sum_{i=1}^{p} \alpha_i \frac{|\epsilon_{t-i}|}{\sigma_{t-i}} + \sum_{j=1}^{q} \beta_j \log(\sigma_{t-j}^2) + \sum_{k=1}^{r} \gamma_k \frac{\epsilon_{t-k}}{\sigma_{t-k}}$
-- Machine learning extensions:
-  - NNEGARCH: Neural Network EGARCH [@liu2020neural] ([Python code](https://github.com/Technica-Corporation/Neural-EGARCH))
-  - SVEGARCH: Support Vector EGARCH [@chen2020forecasting] ([MATLAB code](https://www.mathworks.com/matlabcentral/fileexchange/73381-sv-egarch-model))
-
-## R Example - EGARCH Model
-```{r}
-#| echo: true
-library(rugarch)
-
-spec_egarch = ugarchspec(variance.model = list(model = "eGARCH", garchOrder = c(1, 1)), 
-                         mean.model = list(armaOrder = c(0, 0)), distribution.model = "norm")
-
-fit_egarch = ugarchfit(spec_egarch, data = dax_returns)
-```
-
-## Explanation of EGARCH Model Code
-- Load the `rugarch` package
-- Specify the EGARCH model using `ugarchspec()`
-  - Set the variance model to `eGARCH` (exponential GARCH)
-  - Set the GARCH order to `(1, 1)`
-  - Specify the mean model as `ARMA(0, 0)` (constant mean)
-  - Set the error distribution to `norm` (Gaussian)
-- Fit the specified EGARCH model to `dax_returns` using `ugarchfit()`
-
-## IGARCH Models
-- Integrated GARCH, for highly persistent volatility
-- GARCH coefficients sum to one: $\sum_{i=1}^{p} \alpha_i + \sum_{j=1}^{q} \beta_j = 1$
-- For long memory in volatility
-- Machine learning extensions:
-  - NNIGARCH: Neural Network IGARCH [@li2016neural] ([R package](https://cran.r-project.org/web/packages/nnarch/index.html))
-  - SVIGARCH: Support Vector IGARCH [@chen2018forecasting] ([MATLAB code](https://www.mathworks.com/matlabcentral/fileexchange/73382-sv-igarch-model))
-
-## R Example - IGARCH Model
-
-```{r}
-#| echo: true
-library(rugarch)
-
-spec_igarch = ugarchspec(variance.model = list(model = "iGARCH", garchOrder = c(1, 1)), 
-                         mean.model = list(armaOrder = c(0, 0)), distribution.model = "norm")
-
-fit_igarch = ugarchfit(spec_igarch, data = dax_returns)
-fit_igarch
-
-```
-
-## Explanation of IGARCH Model Code
-- Load the `rugarch` package
-- Specify the IGARCH model using `ugarchspec()`
-  - Set the variance model to `iGARCH` (integrated GARCH)
-  - Set the GARCH order to `(1, 1)`
-  - Specify the mean model as `ARMA(0, 0)` (constant mean)
-  - Set the error distribution to `norm` (Gaussian)
-- Fit the specified IGARCH model to `dax_returns` using `ugarchfit()`
-
-## Multivariate Time Series Models
-
-- **Theoretical justification:**
-  - Financial variables often interact and influence each other
-  - Univariate models ignore potentially valuable information
-  - Multivariate models capture interdependencies and co-movements
-- **Practical justification:**
-  - Improved forecasting by leveraging information from multiple series
-  - Better understanding of dynamic relationships and spillover effects
-  - Crucial for portfolio management, risk assessment, policy analysis
-
-## Vector Autoregression (VAR)
-- Generalization of univariate AR to multivariate series
-- Each variable is linear function of its own lags & lags of others
-- VAR(p): $y_t = c + A_1 y_{t-1} + \ldots + A_p y_{t-p} + \varepsilon_t$
-- Used for macroeconomic analysis, policy impact studies
-- Machine learning extensions:
-  - RegVAR: Regularized VAR [@nicholson2017varx] ([R package](https://cran.r-project.org/web/packages/BigVAR/index.html))
-  - Deep VAR: LSTM & RNN-based VAR [@salinas2020deepar] ([Python code](https://github.com/awslabs/gluon-ts))
-
-## R Example - VAR(1) Model 
-::: columns
-::: column
-```{r}
-#| echo: true 
-library(vars)
-
+# Create a visual representation
+# Create a shock series
 set.seed(123)
-ts1 = cumsum(rnorm(100)) 
-ts2 = 0.5*ts1 + rnorm(100)
+e <- rep(0, 50)
+e[25] <- 2  # Large shock
 
-fit_var = VAR(cbind(ts1, ts2), p=1) 
+# Create volatility impact
+sigma2 <- numeric(50)
+sigma2[1] <- omega/(1-alpha1)  # Unconditional variance
 
-summary(fit_var)
-
-forecast_var = predict(fit_var, n.ahead=10)
-```
-:::
-
-## Explanation of VAR Model Code
-- Load the `vars` package
-- Set a seed for reproducibility
-- Generate two simulated time series `ts1` and `ts2`
-  - `ts1` is a random walk process
-  - `ts2` is a linear combination of `ts1` plus noise
-- Fit a VAR(1) model to the combined time series using `VAR()`
-  - Specify the lag order `p=1`
-- Display the summary of the fitted VAR model
-- Generate forecasts for the next 10 steps using `predict()`
-
-## Cointegration & Error Correction Models
-- Some non-stationary series can combine to stationary series
-- Implies long-run equilibrium relationship
-- Error Correction Model (ECM) for short-run adjustments to equilibrium
-- $\Delta y_t = \alpha (y_{t-1} - \beta x_{t-1}) + \gamma_1 \Delta y_{t-1} + \gamma_2 \Delta x_{t-1} + \varepsilon_t$
-- Used for modeling long-run economic relationships
-- Machine learning extensions:
-  - SVR, ANN for cointegration estimation [@kao2009applying] ([R package](https://cran.r-project.org/web/packages/tsDyn/index.html))
-  - RF, GBM for ECM forecasting [@chuku2019intelligent] ([Python code](https://github.com/chukulert/LSTM-ECM))
-
-## R Example - Cointegration and ECM
-
-```{r}
-#| echo: true
-library(urca)
-library(dplyr)
-library(tibble)
-library(tidyr)
-
-set.seed(123)
-y <- cumsum(rnorm(100))
-x <- 0.5*y + rnorm(100)
-d <- tibble(y, x)
-
-# Perform lag and difference transformations using dplyr
-d <- d %>%
-  mutate(
-    y_lag1 = lag(y, 1), # Lag y by one period
-    x_lag1 = lag(x, 1), # Lag x by one period
-    diff_y = y - lag(y, 1), # Difference of y
-    diff_x = x - lag(x, 1), # Difference of x
-    diff_y_lag1 = lag(diff_y, 1), # Lagged difference of y
-    diff_x_lag1 = lag(diff_x, 1) # Lagged difference of x
-  ) %>%
-  drop_na() # Drop NA values to ensure all rows have complete cases
-
-# Fit the model with dplyr-transformed variables
-ecm_fit <- lm(diff_y ~ y_lag1 + x_lag1 + diff_y_lag1 + diff_x_lag1, data = d)
-
-summary(ecm_fit)
-```
-
-## Explanation of Cointegration and ECM Code
-- Load the `urca` package
-- Set a seed for reproducibility
-- Generate two cointegrated time series `y` and `x`
-  - `y` is a random walk process
-  - `x` is a linear combination of `y` plus noise
-- Perform Johansen cointegration test using `ca.jo()`
-  - Specify the test type as `"trace"` (trace test)
-  - Set the lag order `K=2`
-  - Specify the deterministic terms `ecdet="none"`
-  - Set the specification to `"transitory"` (no deterministic terms in cointegration)
-- Display the summary of the cointegration test
-- Fit an ECM using `lm()`
-  - Specify the differenced `y` as the dependent variable
-  - Include lagged levels and differences of `y` and `x` as predictors
-- Display the summary of the fitted ECM
-
-## Vector Error Correction Models (VECM)
-- VAR model for cointegrated series
-- Combines differencing & error correction
-- $\Delta y_t = \alpha \beta' y_{t-1} + \Gamma_1 \Delta y_{t-1} + \ldots + \Gamma_{p-1} \Delta y_{t-p+1} + \varepsilon_t$
-- Used for modeling cointegrated financial series, e.g., pairs trading
-- Machine learning extensions:
-  - Sparse VECM: LASSO & Adaptive LASSO [@wilms2016forecasting] ([R package](https://cran.r-project.org/web/packages/svars/index.html))
-  - CNN-VECM: Convolutional NN-based VECM [@borovykh2017conditional] ([Python code](https://github.com/philipperemy/deep-learning-bitcoin))
-  - Attention VECM: Attention mechanism for VECM [@borovykh2017conditional] ([Python code](https://github.com/philipperemy/deep-learning-bitcoin))
-
-## R Example - VECM
-```{r}
-#| echo: true
-library(tsDyn)
-
-vecm_fit = VECM(cbind(y,x), lag=2, r=1, include = "const", estim = "ML")
-summary(vecm_fit)
-
-vecm_forecast = predict(vecm_fit, n.ahead = 10)
-```
-
-## Explanation of VECM Code
-- Load the `tsDyn` package
-- Fit a VECM to the cointegrated series `y` and `x` using `VECM()`
-  - Specify the lag order `lag=2`
-  - Set the cointegration rank `r=1`
-  - Include a constant term in the model `include="const"`
-  - Use maximum likelihood estimation `estim="ML"`
-- Display the summary of the fitted VECM
-- Generate forecasts for the next 10 steps using `predict()`
-
-## Granger Causality
-- Tests if one series is useful for forecasting another
-- Series X Granger-causes Y if past X helps predict Y beyond past Y
-- Used for lead-lag analysis, studying information flow & spillovers
-- Machine learning extensions:
-  - Regularized GC: LASSO, Elastic Net [@nicholson2017varx] ([R package](https://cran.r-project.org/web/packages/BigVAR/index.html))
-  - Nonlinear ML GC: SVM, Random Forests [@tank2018neural] ([Python code](https://github.com/iancovert/neural-granger-causality))
-
-## R Example - Granger
-
-Causality
-```{r}
-#| echo: true
-library(lmtest)
-
-grangertest(y ~ x, order = 2)
-```
-
-## Explanation of Granger Causality Code
-- Load the `lmtest` package
-- Perform Granger causality test using `grangertest()`
-  - Specify the formula `y ~ x` to test if `x` Granger-causes `y`
-  - Set the lag order `order=2`
-- The test results indicate whether `x` Granger-causes `y` at the specified lag order
-
-
-## Critique of Granger Causality
-
->Theoretical Critique
-
-- Granger causality is based on predictive ability, not true causality
-  - "Causes" in Granger sense means "helps predict" [@granger1980testing]
-  - Lacks interventional interpretation of causality [@pearl2009causal]
-- Assumes causal sufficiency: all relevant variables are included
-  - Omitted variables can lead to spurious Granger causality [@eichler2013causal]
-- Assumes no instantaneous causality: causes precede effects in time
-  - Instantaneous causality not captured by Granger causality [@lütkepohl2013vector]
-- Sensitive to variable transformations and aggregation [@sims1999granger]
-- Limited to linear models, may miss nonlinear causal relationships
-
-## Critique of Granger Causality
-
->Practical Critique
-
-- Suffers from the usual problems of frequentist statistics
-  - P-values, confidence intervals, and hypothesis tests can be misinterpreted
-  - Sensitive to model assumptions and specification choices
-  
-- Requires large sample sizes for reliable results [@haugh1976checking]
-- Lag order selection can affect the conclusions [@thornton1985granger]
-- Aggregation over time (e.g., monthly vs. quarterly) can change results
-- Difficult to interpret when many variables are involved
-- Does not provide insight into causal mechanisms
-
-## Judea Pearl's Critique [@pearl2009causal]
-- Granger causality is a statistical notion, not a causal one
-- Causal inference requires interventional reasoning (do-calculus)
-- Granger causality cannot distinguish between:
-  - Direct causation: $X \rightarrow Y$
-  - Indirect causation: $X \rightarrow Z \rightarrow Y$
-  - Common cause: $Z \rightarrow X$ and $Z \rightarrow Y$
-- Granger causality can lead to incorrect causal conclusions
-  - Example: Barometer readings Granger-cause rain, but don't cause it
-
-## Clive Granger's Response [@granger1988some]
-- Acknowledged limitations of Granger causality
-- Emphasized it's a concept of "forecasting causality"
-- Agreed it does not imply true causality in all cases
-- Suggested using "Granger causality" to avoid confusion with true causality
-
-## Summarising the critique
-
-- Granger causality is a statistical concept of predictive ability
-- It is not a reliable method for inferring true causal relationships
-- Granger causality has several theoretical and practical limitations
-- Judea Pearl's causal inference framework provides a more rigorous approach
-- Granger acknowledged the limitations and the need for caution in interpretation
-
-
-
-## State Space Models & Kalman Filter
-- Model system via observed and unobserved (latent) variables
-- Measurement equation: observed = function(latent)
-- Transition equation: latent variable dynamics
-- Kalman filter estimates latent variables given observed data
-- Used for time-varying financial models, e.g., stochastic volatility
-- Machine learning extensions:
-  - Deep State Space: Deep learning for state space [@rangapuram2018deep] ([Python code](https://github.com/awslabs/gluon-ts))
-  - VAE: Variational Autoencoder for state space [@krishnan2017structured] ([Python code](https://github.com/clinicalml/structuredinference))
-  - Particle filtering: SMC, MCMC methods [@doucet2000sequential] ([R package](https://cran.r-project.org/web/packages/smcUtils/index.html))
-
-## R Example - State Space Model & Kalman Filter
-```{r}
-#| echo: true
-library(dlm)
-
-# Your buildFun definition remains the same
-buildFun = function(omega){
-  dlmModPoly(order = 1, dV = exp(omega[1]), dW = exp(omega[2]))
+for (t in 2:50) {
+  sigma2[t] <- omega + alpha1 * e[t-1]^2
 }
 
-# Fitting the model
-fit_dlm = dlmMLE(y, parm = c(0, 0), build = buildFun)
+# Plot
+barplot(e^2, main="Impact of a Shock in ARCH(1) Model", 
+        col="lightblue", border=NA,
+        xlab="Time", ylab="Values")
+lines(sigma2, col="red", lwd=2)
+legend("topright", legend=c("Squared Shock", "Volatility Response"),
+       col=c("lightblue", "red"), lwd=c(8, 2), bg="white")
+```
 
-# IMPORTANT: Construct the model using the estimated parameters
-mod_estimated = buildFun(fit_dlm$par)
+- The visualization demonstrates "volatility clustering"
+- A single market shock (blue bar at time 25)
+- Red line shows how one shock creates a "ripple effect"
 
-# Apply dlmFilter and dlmSmooth using the constructed model with estimated parameters
-filtered_states = dlmFilter(y, mod = mod_estimated)
-smoothed_states = dlmSmooth(y, mod = mod_estimated)
+- Volatility increases immediately after the shock gradually decays back to baseline
 
+**Mimics real financial markets:**
+
+- Large price movements breed uncertainty
+- Periods of calm punctuated by sudden changes
+- Past shocks influence future market variability
+
+:::
+:::
+
+## Economic Intuition Behind ARCH
+
+### Why does ARCH make economic sense?
+- **New information**: Market shocks lead to uncertainty
+- **Market microstructure**: Trading behavior adapts to new information
+- **Risk premium**: Investors require higher returns during volatile periods
+
+- Can you think of a major financial event that might have caused volatility clustering?
+
+## From ARCH to GARCH: A Conceptual Bridge
+
+::: columns
+::: {.column width="60%"}
+**The limitation of ARCH models:**
+
+- Need many parameters (long lag structure) to capture persistent volatility
+- **Example**: After a market shock, volatility might remain elevated for months
+
+**The GARCH innovation:**
+
+- Add lagged *volatility itself* as a predictor
+- **Intuition**: If today is volatile, tomorrow is likely volatile too
+- **Result**: More parsimonious model that better captures real-world persistence
+:::
+
+::: {.column width="40%"}
+```{r memory_structure, echo=FALSE}
+# Create visualization of memory structure
+set.seed(123)
+t <- 50
+shock <- numeric(t)
+shock[10] <- 1  # Shock at t=10
+
+# ARCH(1) memory - decays quickly
+arch_memory <- numeric(t)
+arch_memory[10] <- 1
+for (i in 11:t) {
+  arch_memory[i] <- 0.7 * arch_memory[i-1]^2
+}
+
+# GARCH(1,1) memory - decays slowly
+garch_memory <- numeric(t)
+garch_memory[10] <- 1
+for (i in 11:t) {
+  garch_memory[i] <- 0.1 * garch_memory[i-1]^2 + 0.85 * garch_memory[i-1]
+}
+
+# Plot
+plot(1:t, garch_memory, type="l", col="blue", lwd=2,
+     main="Volatility Memory: ARCH vs GARCH",
+     xlab="Time After Shock", ylab="Impact on Volatility",
+     ylim=c(0, 1))
+lines(1:t, arch_memory, col="red", lwd=2)
+legend("topright", legend=c("GARCH(1,1)", "ARCH(1)"), 
+       col=c("blue", "red"), lwd=2)
+abline(v=10, lty=2, col="gray")
+text(10, 0.9, "Shock", pos=4)
+```
+:::
+:::
+
+## GARCH Models: The Workhorse
+
+::: columns
+::: {.column width="60%"}
+
+- **G**eneralized ARCH by Bollerslev (1986)
+- Adds lagged conditional variances:
+
+$$\sigma_t^2 = \alpha_0 + \sum_{i=1}^{p} \alpha_i \varepsilon_{t-i}^2 + \sum_{j=1}^{q} \beta_j \sigma_{t-j}^2$$
+
+- More parsimonious than ARCH
+- GARCH(1,1) often sufficient for most financial series
+- Captures **persistence of volatility**
+- Industry standard for risk management
+:::
+
+::: {.column width="40%"}
+```{r persistence_compare, echo=FALSE}
+# Create comparison of volatility persistence
+t <- 100
+shock <- rep(0, t)
+shock[50] <- 1  # Single shock at t=50
+
+# ARCH(1) decay
+arch_decay <- rep(0, t)
+arch_decay[50] <- 1
+for (i in 51:t) {
+  arch_decay[i] <- 0.7 * arch_decay[i-1]^2
+}
+
+# GARCH(1,1) decay
+garch_decay <- rep(0, t)
+garch_decay[50] <- 1
+for (i in 51:t) {
+  garch_decay[i] <- 0.1 * garch_decay[i-1]^2 + 0.8 * garch_decay[i-1]
+}
+
+# Plot
+plot(1:t, garch_decay, type="l", col="blue", lwd=2,
+     main="Volatility Persistence After a Shock",
+     xlab="Time", ylab="Volatility", ylim=c(0,1))
+lines(1:t, arch_decay, col="red", lwd=2)
+legend("topright", legend=c("GARCH(1,1)", "ARCH(1)"), 
+       col=c("blue", "red"), lwd=2)
+```
+:::
+:::
+
+## R Example - GARCH(1,1) Model {.smaller}
+
+```{r garch_example}
+#| echo: true
+# Specify GARCH model
+spec = ugarchspec(variance.model = list(model = "sGARCH", garchOrder = c(1, 1)), 
+                  mean.model = list(armaOrder = c(0, 0)), 
+                  distribution.model = "norm")
+                  
+# Fit model
+fit = ugarchfit(spec, data = dax_returns)
+print(fit)
+
+# Generate forecasts
+forecast_garch = ugarchforecast(fit, n.ahead = 10)
+```
+
+## Plot Forecasts (Mean and Volatility)
+
+```{r}
+# Extract forecasted values
+sigma_values <- sigma(forecast_garch)
+mean_values <- fitted(forecast_garch)
+
+# Plot with confidence intervals
+plot(1:10, mean_values, type = "l", col = "blue", 
+     ylim = c(min(mean_values - 2*sigma_values), max(mean_values + 2*sigma_values)),
+     main = "GARCH Forecast with 95% Confidence Interval",
+     xlab = "Days Ahead", ylab = "Forecasted Returns")
+
+# Add volatility bands (95% confidence interval)
+lines(1:10, mean_values + 1.96*sigma_values, lty = 2, col = "red")
+lines(1:10, mean_values - 1.96*sigma_values, lty = 2, col = "red")
+legend("topleft", legend = c("Mean Forecast", "95% Confidence Interval"),
+       col = c("blue", "red"), lty = c(1, 2))
 ```
 
 
-## Explanation of State Space Model & Kalman Filter Code
+## How to Interpret GARCH Output: A Step-by-Step Guide
 
-1. **Load the `dlm` Package**: The first step involves loading the `dlm` package in R. This package is specifically designed for handling dynamic linear models, which are a subset of state space models. It provides tools for model creation, parameter estimation, and inference, including filtering and smoothing.
+::: columns
+::: {.column width="50%"}
+1. **Check coefficient significance**
 
-## Explanation {.small}
-2. **Define the `buildFun()` Function**:
-   - The purpose of this function is to construct a state space model that will be used for analysis. The function takes a parameter vector `omega` as input, which contains the parameters to be estimated.
-   - Inside `buildFun()`, the `dlmModPoly()` function is used to define a polynomial dynamic linear model. By setting the order to 1, you specify a simple model where the current state depends linearly on the previous state plus some Gaussian noise. This is essentially a first-order autoregressive process, AR(1).
-   - The `dV` (observation variance) and `dW` (state variance) are crucial components of the model. They represent the variance of the noise in the observed data and the variance of the noise in the state transition process, respectively. In this setup, both are set to be exponentials of the elements in `omega`. This transformation ensures that `dV` and `dW` are positive, as variances cannot be negative.
+   - Are α and β statistically significant? (p < 0.05)
+   - Is ω (constant) significant?
 
-## Explanation {.small}
-3. **Estimate Model Parameters Using `dlmMLE()`**:
-   - This step involves estimating the parameters of your state space model using maximum likelihood estimation (MLE), facilitated by the `dlmMLE` function. The time series data `y` is provided to the function along with initial guesses for the parameters (`parm = c(0, 0)`). These initial values are crucial as MLE involves optimization that can be sensitive to starting values.
-   - The `buildFun()` function is passed as an argument to `dlmMLE()`, which uses it to construct the model structure based on the current parameter estimates during the optimization process.
+2. **Evaluate persistence (α₁ + β₁)**
+
+   - Close to 1: Highly persistent volatility
+   - 0.9: Very slow mean reversion
+   - 1: Non-stationary volatility (problematic)
+
+3. **Assess volatility response**
+
+   - Higher α₁: Stronger reaction to new information
+   - Higher β₁: Stronger memory of past volatility
+:::
+
+::: {.column width="50%"}
+4. **Calculate half-life of volatility shocks**
+
+   - Half-life = log(0.5) / log(α₁ + β₁)
+   - Example: If α₁ + β₁ = 0.95, half-life ≈ 13.5 days
+
+5. **Determine unconditional variance**
+   - Long-run average variance = ω / (1 - α₁ - β₁)
    
-## Explanation {.small}
-4. **Apply the Kalman Filter Using `dlmFilter()`**:
-   - Once the model parameters have been estimated, the `dlmFilter()` function is used to apply the Kalman filter to the time series data. The Kalman filter is a recursive algorithm that provides estimates of the underlying state variables of the dynamic system as new data becomes available.
-   - The filtered state estimates represent the best estimates of the current state based on all available information up to the current time point. This is useful for understanding the underlying state of the system and for forecasting one step ahead.
+6. **Validate model**
 
-5. **Apply the Kalman Smoother Using `dlmSmooth()`**:
-   - The `dlmSmooth()` function applies the Kalman smoother to the time series data, using the model fitted with the estimated parameters. Unlike the Kalman filter, the smoother takes into account all available data (both past and future relative to the current time point) to provide the best estimates of the state variables.
-   - Smoothing is particularly useful for obtaining more accurate estimates of the state variables throughout the entire time series, as it incorporates information from the entire dataset.
+   - Check standardized residuals
+   - Test for remaining ARCH effects
+   - Verify distribution assumptions
+:::
+:::
 
+```{r garch_calculations, echo=FALSE}
+# Extract parameters from previous fit for demonstration
+coef_table <- coef(fit)
+omega <- coef_table["omega"]
+alpha1 <- coef_table["alpha1"]
+beta1 <- coef_table["beta1"]
+persistence <- alpha1 + beta1
+halflife <- log(0.5)/log(persistence)
+unconditional <- omega / (1 - persistence)
+
+# Create formatted output
+cat("For our model:\n")
+cat("Persistence =", round(persistence, 4), "\n")
+cat("Half-life =", round(halflife, 1), "days\n")
+cat("Unconditional variance =", round(unconditional, 6), "\n")
+```
+
+## Interpreting GARCH Results {.smaller}
+
+::: columns
+::: {.column width="60%"}
+Let's interpret the GARCH(1,1) model:
+
+- **omega (α₀)**: The long-run average variance
+- **alpha1 (α₁)**: The impact of recent shocks
+- **beta1 (β₁)**: The persistence of volatility
+
+**Persistence** = α₁ + β₁
+- If close to 1: Volatility is highly persistent
+- If > 1: Volatility is explosive (non-stationary)
+
+**Unconditional variance** = α₀ / (1 - α₁ - β₁)
+- The long-run volatility level
+:::
+
+::: {.column width="40%"}
+```{r param_table, echo=FALSE}
+# Extract parameters
+coef_table <- coef(fit)
+omega <- coef_table["omega"]
+alpha1 <- coef_table["alpha1"]
+beta1 <- coef_table["beta1"]
+persistence <- alpha1 + beta1
+unconditional <- omega / (1 - persistence)
+
+# Create a table
+params <- data.frame(
+  Parameter = c("ω (omega)", "α₁ (alpha1)", "β₁ (beta1)", 
+                "Persistence (α₁+β₁)", "Unconditional Variance"),
+  Value = c(omega, alpha1, beta1, persistence, unconditional)
+)
+
+# Print as a formatted table
+knitr::kable(params, digits = 4)
+```
+:::
+:::
+
+## Model Validation Flowchart: Is Your GARCH Model Adequate?
+
+::: columns
+::: {.column width="60%"}
+**Step 1: Examine Standardized Residuals**
+```{r resid_tests, echo=TRUE}
+# Get standardized residuals
+std_resid <- residuals(fit, standardize=TRUE)
+# Test for autocorrelation
+Box.test(std_resid, lag=10, type="Ljung-Box")
+# Test for remaining ARCH effects
+Box.test(std_resid^2, lag=10, type="Ljung-Box")
+```
+
+**Step 2: Check Distribution Assumptions**
+```{r qq_plot, echo=FALSE}
+# QQ plot
+qqnorm(std_resid)
+qqline(std_resid, col="red")
+```
+:::
+
+::: {.column width="40%"}
+**Step 3: Assess information criteria**
+
+- Lower AIC/BIC indicates better fit
+- Balance fit quality vs. model complexity
+
+**Step 4: Out-of-sample validation**
+
+- Compare forecasted vs. realized volatility
+- Check VaR exceedance rates
+- Calculate loss functions (MSE, MAE)
+
+**Decision Process:**
+
+- ✓ No autocorrelation in residuals?
+- ✓ No remaining ARCH effects?
+- ✓ Residual distribution matches assumption?
+- ✓ Good out-of-sample performance?
+- ✓ Model parameterization is stable?
+- = Model is adequate for use
+:::
+:::
+
+
+## GARCH-in-Mean: Risk Premium {.smaller}
+
+::: columns
+::: {.column width="60%"}
+- GARCH-M connects risk (volatility) to return
+- Based on financial theory: higher risk → higher return
+- Mean equation includes the conditional variance:
+
+$r_t = c + \delta\sigma_t^2 + \varepsilon_t$
+
+- δ represents the risk premium
+- Useful for asset pricing and portfolio management
+- Tests the risk-return tradeoff
+:::
+
+::: {.column width="40%"}
+```{r garchm_example, echo=TRUE}
+# Specify GARCH-M model
+spec_garchm <- ugarchspec(
+  variance.model = list(model = "sGARCH", garchOrder = c(1, 1)), 
+  mean.model = list(armaOrder = c(0, 0), include.mean = TRUE, archm = TRUE),
+  distribution.model = "norm"
+)
+
+# Fit model
+fit_garchm <- ugarchfit(spec_garchm, data = dax_returns)
+# Extract risk premium parameter
+coef(fit_garchm)["archm"]
+```
+
+**Interpretation:**
+
+- Positive δ: Higher risk → higher return (risk aversion)
+- Negative δ: Higher risk → lower return (flight to quality)
+- Statistical significance indicates valid risk-return relationship
+:::
+:::
+
+## Knowledge Check: Understanding GARCH
+
+>A GARCH(1,1) model has estimated parameters: ω = 0.00001, α₁ = 0.15, β₁ = 0.83.
+   
+**Questions:**
+
+- a) Calculate the persistence of volatility.
+- b) Is this model stationary? Why or why not?
+- c) What's the unconditional variance of this process?
+- d) If volatility doubles today, approximately how long until it's expected to return halfway to its long-run average?
+
+**Take a moment to work through these problems.**
+:::
+
+```{r knowledge_check, echo=FALSE}
+# Create solutions for knowledge check
+omega <- 0.00001
+alpha1 <- 0.15
+beta1 <- 0.83
+persistence <- alpha1 + beta1
+halflife <- log(0.5)/log(persistence)
+unconditional <- omega/(1-persistence)
+
+# Create display for answers
+cat("Solutions:\n")
+cat("a) Persistence = α₁ + β₁ =", alpha1, "+", beta1, "=", persistence, "\n")
+cat("b) Model is stationary because persistence < 1\n")
+cat("c) Unconditional variance = ω/(1-α₁-β₁) =", omega, "/(1-", persistence, ") =", unconditional, "\n")
+cat("d) Half-life = log(0.5)/log(persistence) = log(0.5)/log(", persistence, ") =", round(halflife, 1), "days\n")
+```
+
+## Other GARCH Variants {.small}
+
+::: columns
+::: {.column width="50%"}
+- **IGARCH**: Integrated GARCH for highly persistent volatility
+- **TGARCH**: Threshold GARCH for asymmetric effects
+- **APARCH**: Asymmetric Power ARCH for flexibility
+- **FIGARCH**: Fractionally Integrated GARCH for long memory
+- **GJR-GARCH**: Alternative approach to asymmetry
+:::
+
+::: {.column width="50%"}
+Each variant addresses specific features in financial data:
+
+- Asymmetric responses to news
+- Long memory in volatility
+- Fat tails in return distributions
+- Structural breaks in variance
+:::
+:::
+
+
+## When to use which model?
+
+- **GARCH**: General volatility clustering
+- **EGARCH/GJR**: When analyzing equity markets (leverage effect)
+- **GARCH-M**: Testing risk-return relationship
+- **IGARCH/FIGARCH**: For very persistent volatility (like FX markets)
+
+
+## Connecting GARCH Models to Financial Theory
+
+::: columns
+::: {.column width="60%"}
+**Volatility and Asset Pricing Theory**
+
+- Risk-return tradeoff (CAPM): Required return = risk-free rate + risk premium
+- GARCH-M directly tests if higher volatility leads to higher returns
+- Empirical findings: Often positive but time-varying relationship
+
+**Volatility and Market Efficiency**
+
+- Efficient markets: New information quickly incorporated into prices
+- GARCH: Quantifies speed of information absorption (α₁ parameter)
+- Slower information absorption (higher β₁) might indicate market frictions
+:::
+
+::: {.column width="40%"}
+**Volatility, Leverage and Firm Value**
+
+- Black (1976): Falling stock prices increase financial leverage
+- Result: Higher firm risk → Higher stock volatility
+- EGARCH/GJR models: Quantify this asymmetric effect
+- Practical application: Risk management during market downturns
+
+**Institutional Factors**
+
+- Regulatory changes often affect volatility persistence
+- Market structure (trading hours, circuit breakers) impacts volatility
+- Liquidity affects volatility transmission between markets
+:::
+:::
+
+# Multivariate Time Series Models
+
+## Why Multivariate Models: Financial Interconnections
+
+::: columns
+::: {.column width="50%"}
+**Markets don't exist in isolation:**
+
+- Asset prices move together during market stress
+- Monetary policy affects multiple markets simultaneously
+- Supply chains connect commodity and equity markets
+
+**What we miss with univariate models:**
+
+- **Spillover effects**: How shocks in one market affect others
+- **Lead-lag relationships**: Which markets move first
+- **Common factors**: Underlying drivers of multiple markets
+
+**Examples of financial interconnections:**
+
+- Equity-bond correlations (often negative during crises)
+- Exchange rate impacts on multinational stocks
+- Commodity price effects on producer and consumer stocks
+:::
+
+::: {.column width="50%"}
+```{r network_viz, echo=FALSE}
+# Create a simple network visualization of market interconnections
+# Define nodes (markets)
+markets <- c("Equities", "Bonds", "FX", "Commodities", 
+            "Real Estate", "Crypto")
+n <- length(markets)
+
+# Create positions in a circle
+theta <- seq(0, 2*pi, length.out=n+1)[-(n+1)]
+x <- cos(theta)
+y <- sin(theta)
+
+# Plot the network
+plot(x, y, pch=19, cex=2, col="blue", 
+     xlim=c(-1.5, 1.5), ylim=c(-1.5, 1.5),
+     xaxt="n", yaxt="n", xlab="", ylab="",
+     main="Financial Market Interconnections")
+
+# Add labels
+text(x*1.15, y*1.15, markets, cex=0.9)
+
+# Add connections (simplified)
+# Strong connections
+arrows(x[1], y[1], x[2], y[2], length=0.1, lwd=2)  # Equities-Bonds
+arrows(x[1], y[1], x[3], y[3], length=0.1, lwd=2)  # Equities-FX
+arrows(x[4], y[4], x[1], y[1], length=0.1, lwd=2)  # Commodities-Equities
+
+# Moderate connections
+arrows(x[2], y[2], x[3], y[3], length=0.1, lwd=1)  # Bonds-FX
+arrows(x[4], y[4], x[3], y[3], length=0.1, lwd=1)  # Commodities-FX
+arrows(x[1], y[1], x[5], y[5], length=0.1, lwd=1)  # Equities-Real Estate
+arrows(x[1], y[1], x[6], y[6], length=0.1, lwd=1)  # Equities-Crypto
+
+# Add legend
+legend("bottomright", 
+       legend=c("Strong connection", "Moderate connection"),
+       lwd=c(2,1), bg="white")
+```
+:::
+:::
+
+## Why Multivariate Models? {.smaller}
+
+::: columns
+::: {.column width="60%"}
+- Financial markets are interconnected
+- Assets influence each other
+- Economic variables have complex relationships
+- Key advantages:
+  - Capture spillover effects
+  - Improve forecasting accuracy
+  - Better risk management
+  - Understanding market dynamics
+:::
+
+::: {.column width="40%"}
+```{r returns_scatter, echo=FALSE}
+# Get some financial data
+spy <- tq_get("SPY", from = "2018-01-01", to = "2022-12-31", 
+              get = "stock.prices")[, c("date", "adjusted")]
+qqq <- tq_get("QQQ", from = "2018-01-01", to = "2022-12-31", 
+              get = "stock.prices")[, c("date", "adjusted")]
+
+# Merge data
+etf_data <- merge(spy, qqq, by = "date")
+colnames(etf_data) <- c("date", "SPY", "QQQ")
+
+# Calculate returns
+etf_returns <- etf_data %>%
+  mutate(SPY_ret = log(SPY / lag(SPY)),
+         QQQ_ret = log(QQQ / lag(QQQ))) %>%
+  dplyr::select(date, SPY_ret, QQQ_ret) %>%
+  na.omit()
+
+# Create scatter plot
+plot(etf_returns$SPY_ret, etf_returns$QQQ_ret, 
+     main = "S&P 500 vs NASDAQ ETF Returns",
+     xlab = "SPY Returns", ylab = "QQQ Returns",
+     pch = 19, col = rgb(0,0,1,0.5))
+abline(lm(QQQ_ret ~ SPY_ret, data = etf_returns), col = "red", lwd = 2)
+```
+:::
+:::
+
+## Vector Autoregression (VAR): An Intuitive Approach
+
+::: columns
+::: {.column width="50%"}
+**The basic idea:**
+
+- Extend autoregression to multiple time series
+- Each variable depends on its own past AND other variables' past
+
+**Everyday analogy:**
+
+- Stock market and consumer confidence influence each other:
+  - When stocks rise → confidence improves → stocks rise further
+  - When confidence drops → stocks fall → confidence weakens more
+
+**Practical example: Two-variable VAR(1)**
+
+- Stock returns depend on past stock returns AND past bond returns
+- Bond returns depend on past bond returns AND past stock returns
+- This captures how these markets interact and influence each other
+:::
+
+::: {.column width="50%"}
+```{r var_diagram, echo=FALSE}
+# Create illustration of VAR relationships
+# Simple VAR(1) process with two variables
+
+# Create base plot
+plot(0, 0, type="n", xlim=c(0, 10), ylim=c(0, 10),
+     xlab="", ylab="", xaxt="n", yaxt="n",
+     main="VAR(1) Process: Bidirectional Relationships")
+
+# Add variable boxes
+rect(1, 7, 3, 9, col="lightblue", border="blue")
+text(2, 8, "Stock\nReturns\nt-1")
+
+rect(7, 7, 9, 9, col="lightblue", border="blue")
+text(8, 8, "Stock\nReturns\nt")
+
+rect(1, 1, 3, 3, col="lightgreen", border="darkgreen")
+text(2, 2, "Bond\nReturns\nt-1")
+
+rect(7, 1, 9, 3, col="lightgreen", border="darkgreen")
+text(8, 2, "Bond\nReturns\nt")
+
+# Add arrows for relationships
+arrows(3, 8, 7, 8, length=0.1, lwd=2, col="blue")
+text(5, 8.5, "φ11", col="blue")
+
+arrows(3, 2, 7, 2, length=0.1, lwd=2, col="darkgreen")
+text(5, 2.5, "φ22", col="darkgreen")
+
+arrows(2.5, 7, 7.5, 3, length=0.1, lwd=2, col="purple")
+text(5, 5, "φ21", col="purple")
+
+arrows(2.5, 3, 7.5, 7, length=0.1, lwd=2, col="orange")
+text(5, 5.5, "φ12", col="orange")
+
+# Add legend
+legend("topright", 
+       legend=c("Own lag effect", "Cross-variable effect"),
+       col=c("blue", "purple"), lwd=2, bg="white")
+```
+:::
+:::
+
+## Vector Autoregression (VAR) {.smaller}
+
+::: columns
+::: {.column width="60%"}
+- Generalizes AR models to multiple time series
+- Each variable depends on:
+  - Its own lags
+  - Lags of other variables
+- VAR(p) model:
+
+$y_t = c + A_1 y_{t-1} + ... + A_p y_{t-p} + \varepsilon_t$
+
+- Where $y_t$ is a vector of variables
+- $A_i$ are coefficient matrices
+- Applications:
+  - Monetary policy analysis
+  - Asset return co-movements
+  - Business cycle analysis
+:::
+
+::: {.column width="40%"}
+```{r var_process, echo=FALSE}
+# Example of bivariate relationship
+set.seed(123)
+t <- 100
+y1 <- numeric(t)
+y2 <- numeric(t)
+
+# Initialize
+y1[1:2] <- rnorm(2)
+y2[1:2] <- rnorm(2)
+
+# Generate VAR(2) process
+for (i in 3:t) {
+  y1[i] <- 0.5*y1[i-1] + 0.3*y2[i-2] + rnorm(1, 0, 0.5)
+  y2[i] <- 0.2*y1[i-1] + 0.7*y2[i-1] + rnorm(1, 0, 0.5)
+}
+
+# Plot
+par(mfrow=c(2,1), mar=c(3,4,2,1))
+plot(y1, type="l", main="Variable 1", col="blue")
+plot(y2, type="l", main="Variable 2", col="red")
+```
+:::
+:::
+
+## R Example - VAR(2) Model {.smaller}
+
+```{r var_example}
+#| echo: true
+# Get some stock data
+aapl <- tq_get("AAPL", from = "2020-01-01", to = "2022-12-31")
+msft <- tq_get("MSFT", from = "2020-01-01", to = "2022-12-31")
+
+# Calculate returns
+aapl_ret <- diff(log(aapl$adjusted))
+msft_ret <- diff(log(msft$adjusted))
+
+# Combine into a matrix
+stock_returns <- cbind(aapl_ret, msft_ret)
+colnames(stock_returns) <- c("AAPL", "MSFT")
+
+# Fit VAR model
+var_fit <- VAR(stock_returns, p = 2)
+summary(var_fit)
+
+# Forecast
+var_forecast <- predict(var_fit, n.ahead = 5)
+plot(var_forecast)
+```
+
+## Interpreting VAR Results {.smaller}
+
+- **Coefficients**: How past values affect current values
+- **Cross-variable effects**: Spillovers between series
+- **Impulse Response Functions**: How shocks propagate through system
+- **Forecast Error Variance Decomposition**: Sources of variability
+
+```{r irf_plots}
+#| echo: true
+# Plot impulse response function
+irf_result <- irf(var_fit, n.ahead = 10)
+plot(irf_result)
+```
+
+## VAR Model Practical Interpretation Guide
+
+::: columns
+::: {.column width="50%"}
+**What to look for in VAR output:**
+
+1. **Cross-variable coefficients**
+   - Statistical significance indicates spillover effects
+   - Sign tells direction of influence
+   - Magnitude shows strength of relationship
+   
+2. **Granger causality**
+   - Tests if one variable "causes" another in predictive sense
+   - Rejection of null indicates predictive relationship
+   - Direction of causality provides insights on market leadership
+
+3. **Impulse response functions**
+   - Shape shows how shocks propagate over time
+   - Peak timing reveals reaction speed
+   - Persistence shows long-term impact
+:::
+
+::: {.column width="50%"}
+**Financial applications of VAR models:**
+
+1. **Portfolio diversification**
+   - Strong positive IRFs suggest limited diversification benefits
+   - Delayed responses offer tactical allocation opportunities
+   
+2. **Risk analysis**
+   - Shock transmission patterns reveal systemic vulnerabilities
+   - Variance decomposition quantifies contagion channels
+   
+3. **Trading strategies**
+   - Lead-lag relationships can inform pair trading
+   - Cross-market predictability may offer alpha opportunities
+   
+4. **Economic analysis**
+   - Monetary policy impact assessment
+   - Financial-macroeconomic linkages
+:::
+:::
+
+## Cointegration: Long-Term Relationships {.smaller}
+
+::: columns
+::: {.column width="60%"}
+- Series may wander, but maintain long-run equilibrium
+- **Cointegration**: Non-stationary series form stationary combination
+- Examples:
+  - Stock prices and dividends
+  - Spot and futures prices
+  - Exchange rates of related currencies
+  - Pairs trading in finance
+
+Testing for cointegration:
+
+- Engle-Granger method (two variables)
+- Johansen procedure (multiple variables)
+:::
+
+::: {.column width="40%"}
+```{r cointegration_example, echo=FALSE}
+# Simulate cointegrated series
+set.seed(123)
+t <- 200
+e1 <- cumsum(rnorm(t))
+e2 <- 0.7*e1 + rnorm(t, 0, 0.5)
+spread <- e2 - 0.7*e1  # Should be stationary
+
+# Plot
+par(mfrow=c(2,1), mar=c(3,4,2,1))
+plot(cbind(e1, e2), plot.type="single", col=c("blue", "red"),
+     main="Two Non-stationary Series", ylab="Value")
+legend("topleft", legend=c("Series 1", "Series 2"), 
+       col=c("blue", "red"), lty=1)
+
+plot(spread, type="l", col="green", 
+     main="Their Stationary Linear Combination", ylab="Spread")
+```
+:::
+:::
+
+## Cointegration: An Intuitive Example
+
+::: columns
+::: {.column width="60%"}
+**The pairs trading concept:**
+
+Imagine two competing companies in the same industry:
+
+- Their stock prices often move together due to industry factors
+- Temporary deviations occur due to company-specific news
+- But competitive forces push them back toward equilibrium
+
+**Statistical representation:**
+
+- Both stock price series are non-stationary (random walks)
+- But their *spread* (or linear combination) is stationary
+- This mean-reverting spread is the basis for pairs trading
+
+**Financial applications:**
+
+- Pairs trading strategies
+- Index arbitrage
+- Yield curve analysis
+- Exchange rate modeling
+:::
+
+::: {.column width="40%"}
+```{r pairs_trading, echo=FALSE}
+# Create a more concrete example with real tickers
+# Simulate paired stock prices
+set.seed(345)
+t <- 250  # Trading days (about 1 year)
+
+# Create base trend and common factor
+market <- cumsum(rnorm(t, 0.0005, 0.01))  # Market factor
+
+# Create two cointegrated stock price series
+stock1 <- 50 + 0.5*market + cumsum(rnorm(t, 0, 0.005))  # Stock 1 
+stock2 <- 30 + 0.5*market + cumsum(rnorm(t, 0, 0.005))  # Stock 2
+
+# Calculate spread
+spread <- stock1 - (50/30)*stock2  # Normalized spread
+
+# Plot the example
+par(mfrow=c(2,1), mar=c(3,4,3,1))
+# Stocks
+plot(1:t, stock1, type="l", col="blue", 
+     main="Stock Prices of Two Companies in Same Industry",
+     xlab="Trading Days", ylab="Price ($)")
+lines(1:t, stock2, col="red")
+legend("topleft", legend=c("Stock A", "Stock B"), 
+       col=c("blue", "red"), lty=1)
+
+# Spread
+plot(1:t, spread, type="l", col="green", 
+     main="Cointegration Spread (Mean-Reverting)",
+     xlab="Trading Days", ylab="Spread")
+abline(h=mean(spread), lty=2, col="gray")
+# Add trading signals
+points(which(spread > mean(spread) + 2*sd(spread)), 
+       spread[spread > mean(spread) + 2*sd(spread)], 
+       col="red", pch=19)
+points(which(spread < mean(spread) - 2*sd(spread)),
+       spread[spread < mean(spread) - 2*sd(spread)], 
+       col="green", pch=19)
+legend("topright", legend=c("Sell Signal", "Buy Signal"), 
+       col=c("red", "green"), pch=19)
+```
+:::
+:::
+
+## Vector Error Correction Models (VECM) {.smaller}
+
+::: columns
+::: {.column width="60%"}
+- Combines differencing with error correction
+- For cointegrated variables
+- Includes **long-run equilibrium** and **short-run dynamics**
+- VECM equation:
+
+$\Delta y_t = \alpha\beta' y_{t-1} + \Gamma_1 \Delta y_{t-1} + ... + \varepsilon_t$
+
+- $\beta'y_{t-1}$: Long-run equilibrium relation
+- $\alpha$: Speed of adjustment to equilibrium
+- Applications:
+  - Pairs trading
+  - Term structure of interest rates
+  - International parity conditions
+:::
+
+::: {.column width="40%"}
+```{r vecm_example, echo=TRUE}
+# Create cointegrated series
+set.seed(123)
+t <- 200
+y <- cumsum(rnorm(t))
+x <- 0.5*y + rnorm(t, 0, 0.5)
+data <- cbind(y, x)
+
+# Test for cointegration
+jotest <- ca.jo(data, type="trace", K=2, ecdet="none", spec="transitory")
+summary(jotest)
+
+# Fit VECM
+vecm_fit <- VECM(data, lag=2, r=1, include="const", estim="ML")
+summary(vecm_fit)
+```
+:::
+:::
+
+## Interpreting VECM Results: A Practical Guide
+
+::: columns
+::: {.column width="50%"}
+**Key parameters to examine:**
+
+1. **Cointegrating vectors (β)**
+   - Define the long-run equilibrium relationship
+   - Example: β = [1, -0.5] means y = 0.5x in equilibrium
+   
+2. **Adjustment coefficients (α)**
+   - Speed of adjustment toward equilibrium
+   - Negative values for error correction behavior
+   - Larger magnitude means faster adjustment
+   
+3. **Short-run dynamics (Γ)**
+   - Capture temporary deviations and adjustments
+   - Similar to VAR coefficients
+:::
+
+::: {.column width="50%"}
+**Practical interpretation checklist:**
+
+1. **Is there cointegration?**
+   - Johansen test p-value < 0.05
+   - At least one cointegrating vector
+   
+2. **Is error correction working?**
+   - α coefficients significant
+   - At least one α has correct sign
+   
+3. **Which variable adjusts?**
+   - If α₁ significant: y adjusts to restore equilibrium
+   - If α₂ significant: x adjusts to restore equilibrium
+   - If both: mutual adjustment
+   
+4. **How fast is adjustment?**
+   - Half-life = log(0.5)/log(1-|α|)
+   - Measured in same units as data frequency
+```
+
+**Financial example:** In a stock-dividend model, if stock prices adjust faster than dividends, the α coefficient for stock prices will be larger in magnitude.
+:::
+:::
+
+## Granger Causality: Information Flow {.smaller}
+
+::: columns
+::: {.column width="60%"}
+- Tests if one series helps predict another
+- **X Granger-causes Y** if past X improves Y forecasts
+- Not true causality but predictive relationship
+- Applications:
+  - Lead-lag relationships
+  - Market efficiency testing
+  - Information transmission
+  - Contagion effects
+:::
+
+::: {.column width="40%"}
+```{r granger_test, echo=TRUE}
+# Test for Granger causality
+granger_test <- grangertest(x ~ y, order = 2)
+print(granger_test)
+
+# Plot cross-correlation function
+ccf_result <- ccf(x, y, main="Cross-correlation between series")
+```
+:::
+:::
+
+## Limitations of Granger Causality {.smaller}
+
+::: columns
+::: {.column width="60%"}
+- **Not true causality**:
+  - Only measures prediction ability
+  - Can't distinguish direct from indirect effects
+  - Common cause can create spurious results
+
+- **Practical issues**:
+  - Sensitive to lag selection
+  - Assumes linear relationships
+  - Requires large samples
+  - Sensitive to structural breaks
+:::
+
+::: {.column width="40%"}
+```{r spurious_causality, echo=FALSE}
+# Create a spurious example
+set.seed(123)
+z <- cumsum(rnorm(100))  # Common cause
+x2 <- 0.7*z + rnorm(100, 0, 0.5)  # Effect 1
+y2 <- 0.5*z + rnorm(100, 0, 0.5)  # Effect 2
+
+# Test Granger causality
+gc_result <- grangertest(y2 ~ x2, order = 2)
+
+# Create summary
+cat("Example of potentially spurious Granger causality:\n")
+cat("p-value:", gc_result$"Pr(>F)"[2], "\n")
+if (gc_result$"Pr(>F)"[2] < 0.05) {
+  cat("Conclusion: X appears to Granger-cause Y\n")
+  cat("But in reality, both are caused by Z")
+} else {
+  cat("No Granger causality detected")
+}
+```
+
+**The hidden common factor problem:**
+```{r common_factor, echo=FALSE}
+# Visualize the hidden common cause problem
+par(mfrow=c(1,1))
+plot(z, type="l", col="green", lwd=2,
+     main="Hidden Common Factor Problem",
+     xlab="Time", ylab="Value")
+lines(x2, col="blue")
+lines(y2, col="red")
+legend("topleft", 
+       legend=c("Hidden common factor (Z)", "Variable X", "Variable Y"),
+       col=c("green", "blue", "red"), lwd=c(2,1,1))
+arrows(30, z[30], 30, x2[30], col="darkgreen", length=0.1)
+arrows(30, z[30], 30, y2[30], col="darkgreen", length=0.1)
+text(30, mean(c(z[30], x2[30])), "True\ncausality", pos=4, cex=0.8)
+text(30, mean(c(z[30], y2[30])), "True\ncausality", pos=4, cex=0.8)
+arrows(70, x2[70], 70, y2[70], col="blue", lty=2, length=0.1)
+text(70, mean(c(x2[70], y2[70])), "Spurious\nGranger causality", pos=4, cex=0.8)
+```
+:::
+:::
+
+## State Space Models: An Intuitive Explanation{.tiny}
+
+::: columns
+::: {.column width="60%"}
+**The core idea:**
+
+- Some variables we care about cannot be directly observed
+- We observe noisy signals related to these hidden variables
+- State space models extract the hidden variables from noisy observations
+
+**Financial examples:**
+
+- True market volatility (latent) vs. observed price changes
+- Underlying economic growth (latent) vs. noisy GDP figures
+- True company value (latent) vs. fluctuating stock price
+
+**The Kalman filter:**
+
+- Optimal algorithm to extract signal from noise
+- Updates estimates as new data arrives
+- Provides measure of uncertainty in estimates
+:::
+
+::: {.column width="40%"}
+```{r kalman_viz, echo=FALSE}
+# Create a visualization of Kalman filtering process
+set.seed(456)
+t <- 70
+# True latent state follows random walk
+true_state <- cumsum(rnorm(t, 0, 0.3))
+# Observations with noise
+observations <- true_state + rnorm(t, 0, 0.8)
+
+# Simplified Kalman filter (just for visualization)
+filtered <- numeric(t)
+filtered[1] <- observations[1]  # Initialize
+kalman_gain <- 0.4  # Fixed gain for simplicity
+prediction_error <- numeric(t)
+
+for (i in 2:t) {
+  # Prediction
+  predicted <- filtered[i-1]
+  # Update
+  prediction_error[i] <- observations[i] - predicted
+  filtered[i] <- predicted + kalman_gain * prediction_error[i]
+}
+
+# Plot results
+plot(1:t, observations, type="p", pch=19, col="gray", cex=0.8,
+     main="Kalman Filtering Process",
+     xlab="Time", ylab="Value")
+lines(1:t, true_state, col="blue", lwd=2)
+lines(1:t, filtered, col="red", lwd=2)
+
+# Add labels/legend
+legend("topleft", 
+       legend=c("Observations", "True State", "Filtered Estimate"),
+       col=c("gray", "blue", "red"), 
+       pch=c(19, NA, NA), 
+       lty=c(NA, 1, 1),
+       lwd=c(NA, 2, 2))
+
+# Illustrate filtering process for a few points
+for (i in c(20, 40, 60)) {
+  arrows(i, observations[i], i, filtered[i], 
+         col="darkred", length=0.1, lwd=1.5)
+}
+text(20, mean(c(observations[20], filtered[20])), 
+     "Filter\nreduces\nnoise", pos=4, cex=0.8)
+```
+:::
+:::
+
+
+## EGARCH Models: Capturing Asymmetry
+
+::: columns
+::: {.column width="60%"}
+- **E**xponential GARCH by Nelson (1991)
+- Captures the **leverage effect**:
+  - Negative shocks → greater volatility than positive shocks
+  - Stock price ↓ → firm more leveraged → higher risk
+
+$$\log(\sigma_t^2) = \alpha_0 + \sum \beta_j \log(\sigma_{t-j}^2) + \sum \alpha_i \frac{|\varepsilon_{t-i}|}{\sigma_{t-i}} + \sum \gamma_k \frac{\varepsilon_{t-k}}{\sigma_{t-k}}$$
+
+- The γ parameter captures asymmetry
+- Uses log of variance → no constraints needed
+:::
+
+::: {.column width="40%"}
+```{r leverage_effect, echo=FALSE}
+# Simulate data with negative correlation between returns and volatility
+set.seed(123)
+n <- 1000
+r <- rep(0, n)
+sigma <- rep(0, n)
+sigma[1] <- 0.01
+
+for (i in 2:n) {
+  epsilon <- rnorm(1)
+  r[i-1] <- sigma[i-1] * epsilon
+  # Add asymmetry - negative returns have bigger impact
+  if (r[i-1] < 0) {
+    impact <- 2.5
+  } else {
+    impact <- 1
+  }
+  sigma[i] <- sqrt(0.00001 + 0.85 * sigma[i-1]^2 + 0.1 * impact * r[i-1]^2)
+}
+
+# Create a scatter plot
+plot(r[1:(n-1)], diff(sigma^2), 
+     main="News Impact Curve (Leverage Effect)",
+     xlab="Return (t)", ylab="Change in Variance (t+1)",
+     pch=19, col=rgb(0,0,1,0.5))
+abline(v=0, lty=2)
+# Add annotation
+text(-0.03, 0.0001, "Negative Returns\nIncrease Volatility More", pos=4)
+text(0.03, 0.00002, "Positive Returns\nIncrease Volatility Less", pos=2)
+```
+:::
+:::
+
+## R Example - EGARCH Model {.smaller}
+
+```{r egarch_example}
+#| echo: true
+# Specify EGARCH model
+spec_egarch = ugarchspec(variance.model = list(model = "eGARCH", garchOrder = c(1, 1)), 
+                         mean.model = list(armaOrder = c(0, 0)), 
+                         distribution.model = "norm")
+
+# Fit EGARCH model
+fit_egarch = ugarchfit(spec_egarch, data = dax_returns)
+print(fit_egarch)
+```
+
+## Understanding the Leverage Effect
+
+::: columns
+::: {.column width="60%"}
+**The financial theory behind asymmetry:**
+
+1. **Leverage hypothesis (Black, 1976)**
+   - When stock price falls, debt-to-equity ratio increases
+   - Higher leverage = higher financial risk
+   - Result: Negative returns → higher volatility
+
+2. **Volatility feedback effect**
+   - Higher expected volatility demands higher returns
+   - To get higher expected returns, price must fall
+   - Result: Volatility increases → stock price falls
+   
+3. **Behavioral factors**
+   - Loss aversion: Investors react more strongly to losses
+   - Fear drives more trading activity than greed
+   - Result: Market panic during downturns
+:::
+
+::: {.column width="40%"}
+```{r news_impact, echo=FALSE}
+# Create visual representation of news impact curves
+x <- seq(-3, 3, by=0.1)  # Range of shocks
+
+# GARCH - symmetric impact
+garch_impact <- 0.1 * x^2
+
+# EGARCH - asymmetric impact (simplified)
+egarch_impact <- 0.1 * (abs(x) + (-0.3) * x) 
+
+# GJR-GARCH - threshold impact
+gjr_impact <- ifelse(x < 0,
+                   0.05 * x^2 + 0.1 * x^2,  # Negative shocks
+                   0.05 * x^2)              # Positive shocks
+
+# Create plot
+plot(x, garch_impact, type="l", col="blue", lwd=2,
+     main="News Impact Curves Comparison",
+     xlab="Shock (Return Surprise)",
+     ylab="Impact on Volatility")
+lines(x, egarch_impact, col="red", lwd=2)
+lines(x, gjr_impact, col="green", lwd=2)
+abline(v=0, lty=2, col="gray")
+abline(h=0, lty=2, col="gray")
+legend("topleft", 
+       legend=c("GARCH (Symmetric)", "EGARCH (Smooth Asymmetry)", 
+                "GJR (Threshold Asymmetry)"),
+       col=c("blue", "red", "green"), lwd=2)
+```
+:::
+:::
+
+## GARCH Family Model Selection Guide
+
+| Model | Key Feature | When to Use | Typical Application |
+|-------|-------------|-------------|---------------------|
+| ARCH(q) | Uses q lags of squared returns | Simple volatility clustering | Historical baseline model |
+| GARCH(p,q) | Adds p lags of conditional variance | Persistent volatility | General financial returns |
+| EGARCH | Log form, asymmetric response | Leverage effects | Equity markets |
+| GJR-GARCH | Threshold-based asymmetry | Leverage effects | Alternative to EGARCH |
+| GARCH-M | Volatility in mean equation | Risk premium analysis | Asset pricing tests |
+| IGARCH | Restricted for unit root in variance | Very persistent volatility | FX markets, long memory |
+| FIGARCH | Fractional integration | Long memory processes | High-frequency data |
+| APARCH | Flexible power transformation | When standard models fail | Flexible modeling |
+
+## Advanced Machine Learning Extensions {.smaller}
+
+::: columns
+::: {.column width="60%"}
+Traditional time series models can be enhanced with ML:
+
+- **Neural GARCH**: LSTM networks for volatility forecasting
+- **Support Vector GARCH**: SVM for conditional variance
+- **Random Forest VAR**: Non-parametric multivariate modeling
+- **Deep State Space Models**: DL for latent state estimation
+
+Key advantages:
+
+- Capture non-linear relationships
+- Handle high-dimensional data
+- Less restrictive assumptions
+- Often better out-of-sample performance
+:::
+
+::: {.column width="40%"}
+```{r nn_viz, echo=FALSE}
+# Create simple visualization of neural network architecture
+plot(0, 0, type="n", xlim=c(0,10), ylim=c(0,10), 
+     xaxt="n", yaxt="n", xlab="", ylab="", frame.plot=FALSE,
+     main="Neural Network Architecture for Time Series")
+
+# Input layer
+for (i in 1:5) {
+  points(2, i+2, pch=19, col="blue", cex=1.5)
+  text(0.5, i+2, paste("x[t-", i-1, "]", sep=""))
+}
+
+# Hidden layers
+for (i in 1:4) {
+  for (j in 1:4) {
+    points(5, j+3, pch=19, col="red", cex=1.5)
+    # Connect to inputs
+    for (k in 1:5) {
+      lines(c(2, 5), c(k+2, j+3), col="grey", lwd=0.5)
+    }
+  }
+}
+
+# Output layer
+points(8, 5, pch=19, col="green", cex=1.5)
+text(9.5, 5, "σ²[t]")
+for (j in 1:4) {
+  lines(c(5, 8), c(j+3, 5), col="grey", lwd=0.5)
+}
+```
+:::
+:::
+
+## Integrating Time Series Models with Machine Learning
+
+::: columns
+::: {.column width="50%"}
+**Hybrid modeling approaches:**
+
+1. **Two-stage models**
+   - Traditional models capture linear relationships
+   - ML models handle remaining non-linearities
+   - Example: ARIMA-neural network hybrids
+
+2. **Feature engineering**
+   - Use volatility model outputs as ML features
+   - Combine technical indicators with model-based signals
+   - Incorporate fundamental and alternative data
+
+3. **Regime switching**
+   - ML methods identify market regimes
+   - Different time series models for each regime
+   - Example: Use classification algorithms to detect regimes, then apply appropriate GARCH variant
+:::
+
+::: {.column width="50%"}
+**Implementation example:**
+```r
+# Step 1: Fit traditional GARCH model
+garch_model <- ugarchfit(...)
+
+# Step 2: Extract GARCH features
+volatility <- sigma(garch_model)
+residuals <- residuals(garch_model)
+
+# Step 3: Combine with other features
+features <- cbind(
+  lagged_returns,
+  volatility,
+  residuals,
+  technical_indicators,
+  fundamental_data
+)
+
+# Step 4: Train ML model on features
+ml_model <- randomForest(
+  x = features,
+  y = future_returns,
+  ntree = 500
+)
+```
+
+**Benefits:**
+
+- Preserves interpretability of time series models
+- Improves prediction accuracy with ML techniques
+- Captures more complex market dynamics
+:::
+:::
+
+## Summary of Key Models
+
+## Volatility and Multivariate Models
+
+| Volatility Models | Multivariate Models |
+|:-----------------|:-------------------|
+| **Model Types:** | **Model Types:** |
+| - **ARCH**: Models volatility based on past squared returns | - **VAR**: Captures dynamic relationships between variables |
+| - **GARCH**: Adds lagged volatility for more persistent patterns | - **VECM**: For cointegrated series with long-run equilibrium |
+| - **EGARCH/GJR**: Capture asymmetric effects (leverage effect) | - **State Space Models**: Extract latent variables from noisy data |
+| - **GARCH-M**: Incorporates risk premium in mean equation | |
+| - **FIGARCH**: Captures long memory in volatility | |
+| **When to use:** | **When to use:** |
+| - Market risk assessment | - Asset allocation |
+| - Option pricing and hedging | - Pairs trading |
+| - Portfolio optimization | - Yield curve analysis |
+| - Value-at-Risk measurement | - Economic forecasting |
+| - Trading strategy development | - Systemic risk assessment |
+| | - Market interconnection analysis |
 
 ## Conclusion
-- Volatility & multivariate time series models critical for financial modeling
-- Volatility models extend ARIMA to capture time-varying variance
-- ARIMA-GARCH: Combine mean (ARIMA) and variance (GARCH) dynamics
-- Multivariate models capture interdependencies & cointegration
-  - Theoretically justified by interactions between financial variables
-  - Practically useful for improved forecasting, understanding dynamics
-- Machine learning greatly enhancing model flexibility & performance
-- Continued importance & innovation in this field
+
+::: saltinline
+- Standard ARIMA models have limitations for financial data
+- Volatility models (ARCH/GARCH) capture time-varying risk
+- Multivariate models account for interconnectedness
+- Model selection should be guided by:
+  - The specific financial problem
+  - The properties of the data
+  - The economic theory
+  - Forecasting performance
+:::
+
+::: heatinline
+### Key Takeaway
+These advanced time series models provide powerful tools for financial modeling, risk management, and understanding market dynamics.
+:::
+
+
+## Good resources for further learning:
+- Chan, E. (2021). Machine Learning for Financial Risk Management.
+- Tsay, R. S. (2010). Analysis of Financial Time Series.
+- Cont, R. (2001). Empirical properties of asset returns: stylized facts and statistical issues.
 
 ## References
+
+- Bollerslev, T. (1986). Generalized autoregressive conditional heteroskedasticity. Journal of Econometrics, 31(3), 307-327.
+- Engle, R. F. (1982). Autoregressive conditional heteroscedasticity with estimates of the variance of United Kingdom inflation. Econometrica, 50(4), 987-1007.
+- Nelson, D. B. (1991). Conditional heteroskedasticity in asset returns: A new approach. Econometrica, 59(2), 347-370.
+- Sims, C. A. (1980). Macroeconomics and reality. Econometrica, 48(1), 1-48.
+- Hamilton, J. D. (1994). Time series analysis. Princeton University Press.
+- Tsay, R. S. (2010). Analysis of financial time series (3rd ed.). Wiley.
+- Lütkepohl, H. (2005). New introduction to multiple time series analysis. Springer.
+- Durbin, J., & Koopman, S. J. (2012). Time series analysis by state space methods (2nd ed.). Oxford University Press.
